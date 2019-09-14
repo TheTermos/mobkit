@@ -1,0 +1,477 @@
+Contents
+
+1 Concepts
+	1.1 Behavior functions
+		1.1.1 Low level functions
+		1.1.2 High level functions
+			1.1.2.1 Priority
+	1.2 Brain function
+	1.3 Processing diagram
+	1.4 Entity definition
+	1.5 Exposed luaentity members 
+	
+2 Reference
+	2.1 Utility functions
+	2.2 Built in behaviors
+		2.2.1 High level behaviors
+		2.2.2 Low level behaviors
+	2.3 Constants and member variables
+
+-----------		
+1. Concepts
+-----------
+
+1.1 Behavior functions
+
+These are the most fundamental units of code, every action entities can perform is a separate function.
+There are two types of behaviors:
+- low level, these govern physical actions and interactions (think moves)
+- high level, these are logical structures governing low level behaviors in order to perform more complex tasks
+
+Behaviors run for considerable amount of time, this means the functions are being called repeatedly on consecutive engine steps.
+Therefore a need for preserving state between calls, this is why they are implemented as closures, see defining conventions for details.
+
+Behavior functions are active until they finish the job, are removed from the queue or superseded by a higher priority behavior.
+They signal finished state by returning true, therefore it's very important to carefully design the completion conditions
+
+For a behavior to begin executing it has to be put on a queue. There are two separate queues, one for low and one for high level behaviors.
+Queuing is covered by behavour defining conventions
+
+!!! In simplest scenarios there's no need to code behaviors, much can be achieved using only built-in stuff !!!
+!!! To start using the api it's enough to learn defining mobs and writing brain functions					 !!!
+
+
+1.1.1 Low level behavior functions 
+
+These are physical actions and interactions: steps, jumps, turns etc. here you'll set velocity, yaw, kick off animations and sounds.
+
+Low level behavior definition:
+
+function mobkit.lq_bhv1(self,[optional additional persistent parameters])	-- enclosing function
+	...										-- optional definitions of additional persistent variables											
+	local func=function(self)				-- enclosed function, self is mandatory and the only allowed parameter
+		...									-- actual function definition, remember to return true eventually										
+	end
+	mobkit.queue_low(self,func)				-- this will queue the behavior at the time of lq_bhv1 call
+end
+
+
+1.1.2 High level behavior functions 
+
+These are complex tasks like getting to a position, following other objects, hiding, patrolling an area etc.
+Their job is tracking changes in the environment and managing low level behavior queue accordingly.
+
+High level behavior definition:
+
+function mobkit.hq_bhv1(self,priority,[optional additional persistent parameters])	-- enclosing function
+	...										-- optional definitions of additional persistent variables											
+	local func=function(self)				-- enclosed function, self is mandatory and the only allowed parameter
+		...									-- actual function definition, remember to return true eventually										
+	end
+	mobkit.queue_high(self,func,priority)				-- this will queue the behavior at the time of hq_bhv1 call
+end
+
+
+1.1.2.1 Priority
+
+Unlike low level behaviors which are executed in FIFO order, high level behaviors support prioritization.
+This concept is essential for making sure the right behavior is active at the right time. 
+Prioritization is what makes it possible to interrupt a task in order to perform a more important one
+
+The currently executing behavior is always the first in the queue.
+When a new behavior is placed onto the queue:
+If the queue is not empty a new behavior is inserted before the first behavior of lower priority if such exists, or last.
+If the new behavior supersedes the one currently executing, low level queue is purged immediately.
+
+Common idioms:
+
+hq_bhv1(self,prty):
+	...
+	hq_bhv2(self,prty)		-- bhv1 kicks off bhv2 with equal priority 
+	return true				-- and ends, 
+							-- bhv2 becomes active on the next engine step.
+	  
+hq_bhv1(self,prty):
+	...
+	hq_bhv2(self,prty+1)	-- bhv1 kicks off bhv2 with higher priority 
+							-- bhv2 takes over and when it ends, bhv1 resumes.
+
+							
+Particular prioritization scheme is to be designed by the user according to specific mod requirements.
+
+
+1.2 Brain function		
+------------------
+Every mob must have one. 
+Its job is managing high level behavior queue in response to events which are not intercepted by callbacks. 
+Contrary to what the name suggests, these functions needn't necessarily be too complex thanks to their limited responsibilities.
+
+Typical flow might look like this: 
+
+if mobkit.timer(self,1) then 			-- returns true approx every second
+	local prty = mobkit.get_queue_priority(self)
+	
+	if prty < 20
+		if ... then
+			hq_do_important_stuff(self,20)
+			return
+		end
+	end
+	
+	if prty < 10 then
+		if ... then
+			hq_do_something_else(self,10)
+			return
+		elseif ... then
+			hq_do_this_instead(self,10)
+			return
+		end
+	end
+	
+	if mobkit.is_queue_empty_high(self) then
+		hq_fool_around(self,0)
+	end
+end
+
+
+1.3 Processing diagram
+----------------------
+
+ ---------------------------------------
+|				PHYSICS					|
+|										|
+|		 -----------------------		|
+|		| Brain Function		|		|
+|		 -----------------------		|
+|			  |							|
+|		 -----|-----------------		|
+|		| 	  V		HL Queue	|		|
+|		|	| 1	| 2	| 3	|...	|		| 		
+|		 -----------------------		|
+|			  |							|
+|		 -----|-----------------		|
+|		| 	  V		LL Queue	|		|
+|		| 	| 1	| 2 | 3	|...	|		|
+|		 -----------------------		|
+|										|
+ ---------------------------------------
+
+ Order of execution during an engine step:
+ First comes physics: gravity, buoyancy, friction etc., then the brain function is called.
+ After that, the first behavior on the high level queue, if exists, 
+ and the last, the first low level behavior if present.
+ 
+1.4 Entity definition
+---------------------
+
+minetest.register_entity("mod:name",{
+
+			-- required minetest api props
+			
+	physical = true,
+	collide_with_objects = true,
+	collisionbox = {...},
+	visual = "mesh",
+	mesh = "...",
+	textures = {...},
+	
+	
+				-- required mobkit props
+				
+	timeout = [num],			-- entities are removed after this many seconds inactive
+								-- 0 is never
+								-- mobs having memory entries are not affected
+								
+	buoyancy = [num],			-- (0,1) - portion of collisionbox submerged
+								-- = 1 - controlled buoyancy (fish, submarine)
+								-- > 1 - drowns
+								-- < 0 - MC like water trampolining
+								
+	lung_capacity = [num], 		-- seconds
+	max_hp = [num],
+	on_step = mobkit.stepfunc,	
+	on_activate = mobkit.actfunc,		
+	get_staticdata = mobkit.statfunc,
+	brainfunc = [function user defined],
+	
+				-- optional mobkit props
+				-- or used by built in behaviors
+				
+	animation = {
+		[name]={range={x=[num],y=[num]},speed=[num],loop=[bool]},		-- single
+		
+		[name]={														-- variant, animations are chosen randomly.
+				{range={x=[num],y=[num]},speed=[num],loop=[bool]},		
+				{range={x=[num],y=[num]},speed=[num],loop=[bool]},
+				...
+			}
+		...
+		}
+	sounds = {
+		[name] = [string filename],
+		...
+		}
+	max_speed = [num],					-- m/s
+	jump_height = [num],				-- nodes/meters
+	view_range = [num],					-- nodes/meters
+	attack={range=[num],				-- range is distance between attacker's collision box center
+		damage_groups={fleshy=[num]}},	-- and the tip of the murder weapon in nodes/meters
+	armor_groups = {fleshy=[num]}
+})
+	
+1.5 Exposed luaentity members
+
+Some frequently used entity fields to be accessed directly for convenience
+
+	self.dtime		- dtime as passed to on_step
+	self.hp			- hitpoints
+	self.isonground	- true if pos.y remains unchanged for 2 consecutive steps
+	self.isinliquid	- true if the node at foot level is drawtype=='liquid'
+
+------------
+2. Reference
+------------
+
+2.1 Utility Functions
+
+function mobkit.get_terrain_height(pos,steps)
+	-- recursively search for walkable surface at pos.
+	-- steps (optional) is how far from pos it gives up, expressed in nodes, default 3
+	-- Returns:
+		-- surface height at pos, or nil if not found
+		-- liquid flag: true if found surface is covered with liquid 
+		
+function mobkit.timer(self,s) 
+	-- returns true approx every s seconds
+	-- used to reduce execution of code that needn't necessarily be done on every engine step
+
+function mobkit.pos_shift(pos,vec)
+	-- convenience function
+	-- returns pos shifted by vec
+	-- vec needn't have all three components given, absent components are assumed zero.
+	-- e.g pos_shift(pos,{y=1}) is valid
+	
+function mobkit.get_stand_pos(thing)	
+	-- returns object pos projected onto the bottom collisionbox face
+	-- thing can be luaentity or objectref.
+	
+function mobkit.nodeatpos(pos)
+	-- convenience function
+	-- returns nodedef or nil if it's an ignore node
+
+function mobkit.get_node_pos(pos)
+	-- returns center of the node that pos is inside 
+	
+function mobkit.get_nodes_in_area(pos1,pos2,[full])
+	-- in basic mode returns a table of unique nodes within area indexed by node
+	-- in full=true mode returns a table of nodes indexed by pos
+	-- works for up to 125 nodes.
+
+function mobkit.isnear2d(p1,p2,thresh)
+	-- returns true if pos p2 is within a square with center at pos p1 and radius thresh
+	-- y components are ignored
+	
+function mobkit.is_there_yet2d(pos,dir,dest) -- obj positon; facing vector; destination position
+	-- returns true if a position dest is behind position pos according to facing vector dir
+	-- (checks if dest is in the rear half plane as defined by pos and dir)
+	-- y components are ignored
+
+function mobkit.isnear3d(p1,p2,thresh)
+	-- returns true if pos p2 is within a cube with center at pos p1 and radius thresh
+	
+function mobkit.dir_to_rot(v,rot)
+	-- converts a 3d vector v to rotation like in set_rotation() object method
+	-- rot (optional) is current object rotation
+
+function mobkit.is_alive(thing)		
+	-- non essential, checks if thing exists in the world and is alive
+	-- makes an assumption that luaentities are considered dead when their hp < 100
+	-- thing can be luaentity or objectref.
+	-- used for stored luaentities and objectrefs
+	
+function mobkit.exists(thing)
+	-- checks if thing exists in the world
+	-- thing can be luaentity or objectref.
+	-- used for stored luaentities and objectrefs
+	
+function mobkit.hurt(luaent,dmg)
+	-- decrease luaent.hp by dmg
+
+function mobkit.heal(luaent,dmg)
+	-- increase luaent.hp by dmg
+	
+function mobkit.get_spawn_pos_abr(dtime,intrvl,radius,chance,reduction)
+	-- returns a potential spawn position at random intervals
+	-- intrvl: avg spawn attempt interval for every player
+	-- radius: spawn distance in nodes, active_block_range*16 is recommended
+	-- chance: (0,1) chance to spawn a mob if there are no other objects in area
+	-- reduction: (0,1) spawn chance is reduced by this factor for every object in range.
+	--usage:
+	minetest.register_globalstep(function(dtime)
+		local spawnpos = mobkit.get_spawn_pos_abr(...)
+		if spawnpos then
+			...								-- mod/game specific logic
+		end
+	end)
+
+function mobkit.animate(self,anim)
+	-- makes an entity play an animation of name anim, or does nothing if not defined
+	-- anim is string, see entity definition
+	-- does nothing if the same animation is already running
+	
+function mobkit.make_sound(self,sound)
+	-- sound is string, see entity definition
+	-- makes an entity play sound, or does nothing if not defined 
+
+	
+-- Memory functions. 
+
+This represents mob long term memory
+Warning: Stuff in memory is serialized, never try to remember objectrefs or tables referencing them
+or the engine will crash.
+
+function mobkit.remember(self,key,val)
+	-- premanently store a key, value pair
+function mobkit.forget(self,key)
+	-- clears a memory entry
+function mobkit.recall(self,key)
+	-- returns val associated with key
+
+-- Queue functions
+
+function mobkit.queue_high(self,func,priority)
+	-- only for use in behavior definitions, see 1.1.2
+	
+function mobkit.queue_low(self,func)
+	-- only for use in behavior definitions, see 1.1.1
+	
+	
+function mobkit.clear_queue_high(self)
+function mobkit.clear_queue_low(self)
+	
+function mobkit.is_queue_empty_high(self)
+function mobkit.is_queue_empty_low(self)
+
+function mobkit.get_queue_priority(self)
+	-- returns the priority of currently running behavior
+	-- this is also the highest of all queued behaviors
+
+
+-- Use these inside brain functions --
+
+function mobkit.get_nearby_player(self)	
+	-- returns random player if nearby or nil
+function mobkit.get_nearby_entity(self,name)	
+	-- returns random nearby entity of name or nil
+function mobkit.get_closest_entity(self,name)	
+	-- returns closest entity of name or nil
+
+	
+-- Misc
+
+Neighbors structure represents a node's horizontal neighbors
+Not essential, used by some built in behaviors
+Custom behaviors may not need it.
+
+Neighbor #1 is offset {x=1,z=0}, subsequent numbers go clockwise
+
+function mobkit.dir2neighbor(dir)
+	-- converts a 3d vector to neighbor number, y component ignored
+	
+function mobkit.neighbor_shift(neighbor,shift)	
+	-- get another neighbor number relative to the given, shift: plus is clockwise, minus the opposite
+	-- 1,1 = 2; 1,-2 = 7
+
+	
+2.2 Built in behaviors
+
+function mobkit.goto_next_waypoint(self,tpos)
+	-- this functions groups common operations making mobs move in a specific direction
+	-- not a behavior itself, but is used by some built in HL behaviors 
+	-- which use node by node movement algorithm
+
+2.2.1 High Level Behaviors --
+
+function mobkit.hq_roam(self,prty)
+	-- slow random roaming
+	-- never returns
+	
+function mobkit.hq_follow(self,prty,tgtobj)
+	-- follow the tgtobj 
+	-- returns if tgtobj becomes inactive
+	
+function mobkit.hq_goto(self,prty,tpos)
+	-- go to tpos position
+	-- returns on arrival
+	
+function mobkit.hq_runfrom(self,prty,tgtobj)
+	-- run away from tgtobj object
+	-- returns when tgtobj far enough
+	
+function mobkit.hq_hunt(self,prty,tgtobj)
+	-- follow tgtobj and when close enough, kick off hq_attack
+	-- returns when tgtobj too far
+	
+function mobkit.hq_warn(self,prty,tgtobj)
+	-- when a tgtobj close by, turn towards them and make the 'warn' sound
+	-- kick off hq_hunt if tgtobj too close or timer expired
+	-- returns when tgtobj moves away
+	
+function mobkit.hq_die(self)
+	-- default death, rotate and remove() after set time
+	
+function mobkit.hq_attack(self,prty,tgtobj)
+	-- default attack, turns towards tgtobj and leaps
+	-- returns when tgtobj out of range
+	
+function mobkit.hq_liquid_recovery(self,prty)	
+	-- use when submerged in liquid, scan for nearest land
+	-- if land is found within view_range, kick off hq_swimto
+	-- otherwise die
+	
+function mobkit.hq_swimto(self,prty,tpos)
+	-- swim towards the position tpos, jump if necessary
+	-- returns if standing firmly on dry land
+	
+	
+2.2.2 Low Level Behaviors --
+
+function mobkit.lq_turn2pos(self,tpos)
+	-- gradually turn towards tpos position
+	-- returns when facing tpos
+	
+function mobkit.lq_idle(self,duration)
+	-- do nothing for duration seconds
+	-- set 'stand' animation
+
+function mobkit.lq_dumbwalk(self,dest,speed_factor)
+	-- simply move towards dest
+	-- set 'walk' animation
+	
+function mobkit.lq_dumbjump(self,height)
+	-- if standing on the ground, jump in the facing direction
+	-- height is relative to feet level
+	-- set 'stand' animation
+
+function mobkit.lq_freejump(self)
+	-- unconditional jump in the facing direction
+	-- useful e.g for getting out of water
+	-- returns when the apex has been reached
+	
+function mobkit.lq_jumpattack(self,height,target)
+	-- jump towards the target, punch if a hit
+	-- returns after punch or on the ground
+
+function mobkit.lq_fallover(self)
+	-- gradually rotates Z = 0 to pi/2  
+	
+	
+2.3 Constants and member variables --
+
+mobkit.gravity = -9.8
+mobkit.friction = 0.4 	-- inert entities will slow down when in contact with the ground
+						-- the smaller the number, the greater the effect
+
+self.dtime				-- for convenience, dtime as passed to currently executing on_step()
+self.isonground			-- true if y velocity is 0 for at least two succesive steps
+self.isinliquid			-- true if feet submerged in liquid type=source			
