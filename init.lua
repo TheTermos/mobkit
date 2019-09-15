@@ -38,11 +38,6 @@ local neighbors ={
 	{x=1,z=-1}
 	}
 
-local modpath = minetest.get_modpath("mobkit")
-dofile(modpath .. "/utility.lua")
-dofile(modpath .. "/core.lua")
-dofile(modpath .. "/behaviors.lua")
-
 	
 -- UTILITY FUNCTIONS
 
@@ -253,25 +248,19 @@ function mobkit.turn2yaw(self,tyaw,rate)
 	tyaw = tyaw or 0 --temp
 	rate = rate or 6
 		local yaw = self.object:get_yaw()
-
-		local diff = tyaw-yaw
-		local step = self.dtime*rate
+		yaw = yaw+pi
+		tyaw=(tyaw+pi)%(pi*2)
 		
-		if abs(diff)<step then
-			self.object:set_yaw(tyaw)
-			return true
-		end
-
-		local dirmod = abs(diff) > pi and -1 or 1
-
-		local nyaw = diff < 0 and yaw+step*-dirmod or yaw+step*dirmod
-
-		if nyaw > pi then
-			nyaw=nyaw-pi*2
-		elseif nyaw < -pi then
-			nyaw=nyaw+pi*2
-		end
-		self.object:set_yaw(nyaw)
+		local step=min(self.dtime*rate,abs(tyaw-yaw)%(pi*2))
+		
+		local dir = abs(tyaw-yaw)>pi and -1 or 1
+		dir = tyaw>yaw and dir*1 or dir * -1
+		
+		local nyaw = (yaw+step*dir)%(pi*2)
+		self.object:set_yaw(nyaw-pi)
+		
+		if nyaw==tyaw then return true
+		else return false end
 end
 
 function mobkit.dir_to_rot(v,rot)
@@ -343,7 +332,7 @@ end
 function mobkit.hurt(luaent,dmg)
 	if not luaent then return false end
 	if type(luaent) == 'table' then
-		luaent.hp = (luaent.hp or 0) - dmg
+		luaent.hp = max((luaent.hp or 0) - dmg,0)
 	end
 end
 
@@ -550,6 +539,13 @@ function mobkit.goto_next_waypoint(self,tpos)
 	return true
 end
 
+function mobkit.go_forward_horizontal(self,yaw,speed)	-- sets velocity in yaw direction, y component unaffected
+	local y = self.object:get_velocity().y
+	local vel = vector.multiply(minetest.yaw_to_dir(yaw),speed)
+	vel.y = y
+	self.object:set_velocity(vel)
+end
+
 function mobkit.timer(self,s) -- returns true approx every s seconds
 	local t1 = floor(self.time_total)
 	local t2 = floor(self.time_total+self.dtime)
@@ -694,6 +690,190 @@ local function sensors()
 		end
 	end
 end
+
+------------
+-- CALLBACKS
+------------
+
+function mobkit.default_brain(self)
+	if mobkit.is_queue_empty_high(self) then mobkit.hq_roam(self,0) end
+end
+
+function mobkit.statfunc(self)
+	local tmptab={}
+	tmptab.memory = self.memory
+	tmptab.hp = self.hp
+	tmptab.texture_no = self.texture_no
+	return minetest.serialize(tmptab)
+end
+
+function mobkit.actfunc(self, staticdata, dtime_s)
+	self.lqueue = {}
+	self.hqueue = {}
+	self.nearby_objects = {}
+	self.nearby_players = {}
+	self.pos_history = {}
+	self.path_dir = 1
+	self.time_total = 0
+
+	local sdata = minetest.deserialize(staticdata)
+	if sdata then 
+		for k,v in pairs(sdata) do
+			self[k] = v
+		end
+	end
+	
+	if self.timeout and self.timeout>0 and dtime_s > self.timeout and next(self.memory)==nil then
+		self.object:remove()
+	end
+	
+	if not self.memory then 		-- this is the initial activation
+		self.memory = {} 
+		
+		-- texture variation
+		if #self.textures > 1 then self.texture_no = random(#self.textures) end
+	end
+	
+	-- apply texture
+	if self.texture_no then
+		local props = {}
+		props.textures = {self.textures[self.texture_no]}
+		self.object:set_properties(props)
+	end
+
+--hp
+	self.hp = self.hp or (self.max_hp or 10)
+--armor
+	if type(self.armor_groups) ~= 'table' then
+		self.armor_groups={}
+	end
+	self.armor_groups.immortal = 1
+	self.object:set_armor_groups(self.armor_groups)
+	
+	self.oxygen = self.oxygen or self.lung_capacity
+	self.lastvelocity = {x=0,y=0,z=0}
+	self.height = self.collisionbox[5] - self.collisionbox[2]
+	self.sensefunc=sensors()
+end
+
+function mobkit.stepfunc(self,dtime)	-- not intended to be modified
+	self.dtime = dtime
+--  physics comes first
+--	self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
+	local vel = self.object:get_velocity()
+	
+--	if self.lastvelocity.y == vel.y then
+	if abs(self.lastvelocity.y-vel.y)<0.001 then
+		self.isonground = true
+	else
+		self.isonground = false
+	end
+	
+	-- dumb friction
+	if self.isonground then
+		self.object:set_velocity({x= vel.x> 0.2 and vel.x*mobkit.friction or 0,
+								y=vel.y,
+								z=vel.z > 0.2 and vel.z*mobkit.friction or 0})
+	end
+	
+-- bounciness
+	if self.springiness and self.springiness > 0 then
+		local vnew = vector.new(vel)
+		
+		if not self.collided then						-- ugly workaround for inconsistent collisions
+			for _,k in ipairs({'y','z','x'}) do			
+				if vel[k]==0 and abs(self.lastvelocity[k])> 0.1 then 
+					vnew[k]=-self.lastvelocity[k]*self.springiness 
+				end
+			end
+		end
+		
+		if not vector.equals(vel,vnew) then
+			self.collided = true
+		else
+			if self.collided then
+				vnew = vector.new(self.lastvelocity)
+			end
+			self.collided = false
+		end
+		
+		self.object:set_velocity(vnew)
+	end
+	
+	-- buoyancy
+	local spos = mobkit.get_stand_pos(self)
+	spos.y = spos.y+0.01
+	-- get surface height
+--	local surface = mobkit.get_node_pos(spos).y+0.5
+	local surface = nil
+	local snodepos = mobkit.get_node_pos(spos)
+	local surfnode = mobkit.nodeatpos(spos)
+	while surfnode and surfnode.drawtype == 'liquid' do
+		surface = snodepos.y+0.5
+		if surface > spos.y+self.height then break end
+		snodepos.y = snodepos.y+1
+		surfnode = mobkit.nodeatpos(snodepos)
+	end
+	if surface then				-- standing in liquid
+		self.isinliquid = true
+		local submergence = min(surface-spos.y,self.height)
+		local balance = self.buoyancy*self.height
+		local buoyacc = mobkit.gravity*((balance - submergence)^2/balance^2*sign(balance - submergence))
+		self.object:set_acceleration({x=-vel.x,y=buoyacc-vel.y*abs(vel.y)*0.7,z=-vel.z})
+	else
+		self.isinliquid = false
+		self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
+	end
+	
+	
+	
+	-- local footnode = mobkit.nodeatpos(spos)
+	-- local headnode
+	-- if footnode and footnode.drawtype == 'liquid' then
+		
+		-- vel = self.object:get_velocity()
+		-- headnode = mobkit.nodeatpos(mobkit.pos_shift(spos,{y=self.height or 0}))	-- TODO: height may be nil
+		-- local submergence = headnode.drawtype=='liquid' 
+			-- and	self.buoyancy-1
+			-- or (self.buoyancy*self.height-(1-(spos.y+0.5)%1))^2/(self.buoyancy*self.height)^2*sign(self.buoyancy*self.height-(1-(spos.y+0.5)%1))
+
+		-- local buoyacc = submergence * mobkit.gravity
+		-- self.object:set_acceleration({x=-vel.x,y=buoyacc-vel.y*abs(vel.y)*0.5,z=-vel.z})
+
+	-- end
+
+	if self.brainfunc then
+		-- vitals: fall damage
+		vel = self.object:get_velocity()
+		local velocity_delta = abs(self.lastvelocity.y - vel.y)
+		if velocity_delta > mobkit.safe_velocity then
+			self.hp = self.hp - floor((self.max_hp-100) * min(1, velocity_delta/mobkit.terminal_velocity))
+		end
+		
+		-- vitals: oxygen
+		if self.lung_capacity then
+			local headnode = mobkit.nodeatpos(mobkit.pos_shift(self.object:get_pos(),{y=self.collisionbox[5]})) -- node at hitbox top
+			if headnode and headnode.drawtype == 'liquid' then 
+				self.oxygen = self.oxygen - self.dtime
+			else
+				self.oxygen = self.lung_capacity
+			end
+				
+			if self.oxygen <= 0 then self.hp=0 end	-- drown
+		end
+
+		
+		self:sensefunc()
+		self:brainfunc()
+		execute_queues(self)
+	end
+	
+	self.lastvelocity = self.object:get_velocity()
+	self.time_total=self.time_total+self.dtime
+end
+
+----------------------------
+-- BEHAVIORS
 ----------------------------
 -- LOW LEVEL QUEUE FUNCTIONS
 ----------------------------
@@ -1151,181 +1331,178 @@ function mobkit.hq_swimto(self,prty,tpos)
 	mobkit.queue_high(self,func,prty)
 end
 
-------------
--- CALLBACKS
-------------
+---------------------
+-- AQUATIC
+---------------------
 
-function mobkit.default_brain(self)
-	if mobkit.is_queue_empty_high(self) then mobkit.hq_roam(self,0) end
-end
-
-function mobkit.statfunc(self)
-	local tmptab={}
-	tmptab.memory = self.memory
-	tmptab.hp = self.hp
-	tmptab.texture_no = self.texture_no
-	return minetest.serialize(tmptab)
-end
-
-function mobkit.actfunc(self, staticdata, dtime_s)
-	self.lqueue = {}
-	self.hqueue = {}
-	self.nearby_objects = {}
-	self.nearby_players = {}
-	self.pos_history = {}
-	self.path_dir = 1
-	self.time_total = 0
-
-	local sdata = minetest.deserialize(staticdata)
-	if sdata then 
-		for k,v in pairs(sdata) do
-			self[k] = v
-		end
+-- MACROS
+local function aqua_radar_dumb(pos,yaw,range,reverse)
+	range = range or 4
+	
+	local function newpos(p,y,r)
+		return mobkit.pos_shift(p,vector.multiply(minetest.yaw_to_dir(y),r))
 	end
 	
-	if self.timeout and self.timeout>0 and dtime_s > self.timeout and next(self.memory)==nil then
-		self.object:remove()
-	end
-	
-	if not self.memory then 		-- this is the initial activation
-		self.memory = {} 
-		
-		-- texture variation
-		if #self.textures > 1 then self.texture_no = random(#self.textures) end
-	end
-	
-	-- apply texture
-	if self.texture_no then
-		local props = {}
-		props.textures = {self.textures[self.texture_no]}
-		self.object:set_properties(props)
-	end
-
---hp
-	self.hp = self.hp or (self.max_hp or 10)
---armor
-	if type(self.armor_groups) ~= 'table' then
-		self.armor_groups={}
-	end
-	self.armor_groups.immortal = 1
-	self.object:set_armor_groups(self.armor_groups)
-	
-	self.oxygen = self.oxygen or self.lung_capacity
-	self.lastvelocity = {x=0,y=0,z=0}
-	self.height = self.collisionbox[5] - self.collisionbox[2]
-	self.sensefunc=sensors()
-end
-
-function mobkit.stepfunc(self,dtime)	-- not intended to be modified
-	self.dtime = dtime
---  physics comes first
---	self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
-	local vel = self.object:get_velocity()
-	
---	if self.lastvelocity.y == vel.y then
-	if abs(self.lastvelocity.y-vel.y)<0.001 then
-		self.isonground = true
-	else
-		self.isonground = false
-	end
-	
-	-- dumb friction
-	if self.isonground then
-		self.object:set_velocity({x= vel.x> 0.2 and vel.x*mobkit.friction or 0,
-								y=vel.y,
-								z=vel.z > 0.2 and vel.z*mobkit.friction or 0})
-	end
-	
--- bounciness
-	if self.springiness and self.springiness > 0 then
-		local vnew = vector.new(vel)
-		
-		if not self.collided then						-- ugly workaround for inconsistent collisions
-			for _,k in ipairs({'y','z','x'}) do			
-				if vel[k]==0 and abs(self.lastvelocity[k])> 0.1 then 
-					vnew[k]=-self.lastvelocity[k]*self.springiness 
+	local function okpos(p)
+		local node = mobkit.nodeatpos(p)
+		if node then 
+			if node.drawtype == 'liquid' then 
+				local nodeu = mobkit.nodeatpos(mobkit.pos_shift(p,{y=1}))
+				local noded = mobkit.nodeatpos(mobkit.pos_shift(p,{y=-1}))
+				if (nodeu and nodeu.drawtype == 'liquid') or (noded and noded.drawtype == 'liquid') then
+					return true
+				else
+					return false
+				end
+			else
+				local h,l = mobkit.get_terrain_height(p)
+				if h then 
+					local node2 = mobkit.nodeatpos({x=p.x,y=h+1.99,z=p.z})
+					if node2 and node2.drawtype == 'liquid' then return true, h end
+				else
+					return false
 				end
 			end
-		end
-		
-		if not vector.equals(vel,vnew) then
-			self.collided = true
 		else
-			if self.collided then
-				vnew = vector.new(self.lastvelocity)
+			return false
+		end
+	end
+	
+	local fpos = newpos(pos,yaw,range)
+	local ok,h = okpos(fpos)
+	if not ok then
+		local ffrom, fto, fstep
+		if reverse then 
+			ffrom, fto, fstep = 3,1,-1
+		else
+			ffrom, fto, fstep = 1,3,1
+		end
+		for i=ffrom, fto, fstep  do
+			local ok,h = okpos(newpos(pos,yaw+i,range))
+			if ok then return yaw+i,h end
+			ok,h = okpos(newpos(pos,yaw-i,range))
+			if ok then return yaw-i,h end
+		end
+		return yaw+pi,h
+	else 
+		return yaw, h
+	end	
+end
+
+function mobkit.is_in_deep(target)
+	if not target then return false end
+	local nodepos = mobkit.get_stand_pos(target)
+	local node1 = mobkit.nodeatpos(nodepos)
+	nodepos.y=nodepos.y+1
+	local node2 = mobkit.nodeatpos(nodepos)
+	nodepos.y=nodepos.y-2
+	local node3 = mobkit.nodeatpos(nodepos)
+	if node1 and node2 and node1.drawtype=='liquid' and (node2.drawtype=='liquid' or node3.drawtype=='liquid') then
+		return true
+	end
+end
+
+-- HQ behaviors
+
+function mobkit.hq_aqua_roam(self,prty,speed)
+	local tyaw = 0
+	local init = true
+	local prvscanpos = {x=0,y=0,z=0}
+	local center = self.object:get_pos()
+	local func = function(self)
+		if init then
+			mobkit.animate(self,'def')
+			init = false
+		end
+		local pos = mobkit.get_stand_pos(self)
+		local yaw = self.object:get_yaw()
+		local pos2d = {x=pos.x,y=0,z=pos.z}
+		local scanpos = mobkit.get_node_pos(vector.add(pos,vector.multiply(minetest.yaw_to_dir(yaw),speed)))
+		if not vector.equals(prvscanpos,scanpos) then
+			prvscanpos=scanpos
+			local nyaw,height = aqua_radar_dumb(pos,yaw,speed,true)
+			if height and height > pos.y+self.collisionbox[2] then
+				local vel = self.object:get_velocity()
+				vel.y = vel.y+1
+				self.object:set_velocity(vel)
+			end	
+			if yaw ~= nyaw then
+				tyaw=nyaw
+				mobkit.hq_aqua_turn(self,prty+1,tyaw,speed)
+				return
 			end
-			self.collided = false
+		end
+		if mobkit.timer(self,1) then
+			if vector.distance(pos,center) > abr*16*0.5 then
+				tyaw = minetest.dir_to_yaw(vector.direction(pos,{x=center.x+random()*10-5,y=center.y,z=center.z+random()*10-5}))
+			else
+				if random(10)>=9 then tyaw=tyaw+random()*pi - pi*0.5 end
+			end
 		end
 		
-		self.object:set_velocity(vnew)
+		mobkit.turn2yaw(self,tyaw,3)
+		local yaw = self.object:get_yaw()
+		mobkit.go_forward_horizontal(self,yaw,4)
 	end
-	
-	-- buoyancy
-	local spos = mobkit.get_stand_pos(self)
-	spos.y = spos.y+0.01
-	-- get surface height
---	local surface = mobkit.get_node_pos(spos).y+0.5
-	local surface = nil
-	local snodepos = mobkit.get_node_pos(spos)
-	local surfnode = mobkit.nodeatpos(spos)
-	while surfnode and surfnode.drawtype == 'liquid' do
-		surface = snodepos.y+0.5
-		if surface > spos.y+self.height then break end
-		snodepos.y = snodepos.y+1
-		surfnode = mobkit.nodeatpos(snodepos)
+	mobkit.queue_high(self,func,prty)
+end
+
+function mobkit.hq_aqua_turn(self,prty,tyaw,speed)
+	local func = function(self)
+		local finished=mobkit.turn2yaw(self,tyaw)
+		local yaw = self.object:get_yaw()
+		mobkit.go_forward_horizontal(self,yaw,speed)
+		if finished then return true end
 	end
-	if surface then				-- standing in liquid
-		self.isinliquid = true
-		local submergence = min(surface-spos.y,self.height)
-		local balance = self.buoyancy*self.height
-		local buoyacc = mobkit.gravity*((balance - submergence)^2/balance^2*sign(balance - submergence))
-		self.object:set_acceleration({x=-vel.x,y=buoyacc-vel.y*abs(vel.y)*0.7,z=-vel.z})
-	else
-		self.isinliquid = false
-		self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
-	end
-	
-	
-	
-	-- local footnode = mobkit.nodeatpos(spos)
-	-- local headnode
-	-- if footnode and footnode.drawtype == 'liquid' then
-		
-		-- vel = self.object:get_velocity()
-		-- headnode = mobkit.nodeatpos(mobkit.pos_shift(spos,{y=self.height or 0}))	-- TODO: height may be nil
-		-- local submergence = headnode.drawtype=='liquid' 
-			-- and	self.buoyancy-1
-			-- or (self.buoyancy*self.height-(1-(spos.y+0.5)%1))^2/(self.buoyancy*self.height)^2*sign(self.buoyancy*self.height-(1-(spos.y+0.5)%1))
+	mobkit.queue_high(self,func,prty)
+end
 
-		-- local buoyacc = submergence * mobkit.gravity
-		-- self.object:set_acceleration({x=-vel.x,y=buoyacc-vel.y*abs(vel.y)*0.5,z=-vel.z})
-
-	-- end
-
-	if self.brainfunc then
-		-- vitals: fall damage
-		vel = self.object:get_velocity()
-		local velocity_delta = abs(self.lastvelocity.y - vel.y)
-		if velocity_delta > mobkit.safe_velocity then
-			self.hp = self.hp - floor((self.max_hp-100) * min(1, velocity_delta/mobkit.terminal_velocity))
+function mobkit.hq_aqua_attack(self,prty,tgtobj,speed)
+	local tyaw = 0
+	local prvscanpos = {x=0,y=0,z=0}
+	local init = true
+	local func = function(self)
+		if not mobkit.is_alive(tgtobj) then return true end
+		if init then
+			mobkit.animate(self,'fast')
+			mobkit.make_sound(self,'attack')
+			init = false
 		end
-		
-		-- vitals: oxygen
-		local headnode = mobkit.nodeatpos(mobkit.pos_shift(self.object:get_pos(),{y=self.collisionbox[5]})) -- node at hitbox top
-		if headnode and headnode.drawtype == 'liquid' then 
-			self.oxygen = self.oxygen - self.dtime
-		else
-			self.oxygen = self.lung_capacity
+		local pos = mobkit.get_stand_pos(self)
+		local yaw = self.object:get_yaw()
+		local pos2d = {x=pos.x,y=0,z=pos.z}
+		local scanpos = mobkit.get_node_pos(vector.add(pos,vector.multiply(minetest.yaw_to_dir(yaw),speed)))
+		if not vector.equals(prvscanpos,scanpos) then
+			prvscanpos=scanpos
+			local nyaw,height = aqua_radar_dumb(pos,yaw,speed)
+			if height and height > pos.y+self.collisionbox[2] then
+				local vel = self.object:get_velocity()
+				vel.y = vel.y+1
+				self.object:set_velocity(vel)
+			end	
+			if yaw ~= nyaw then
+				tyaw=nyaw
+				mobkit.hq_aqua_turn(self,prty+1,tyaw,speed)
+				return
+			end
 		end
-			
-		if self.oxygen <= 0 then self.hp=0 end	-- drown
 
-		
-		self:sensefunc()
-		self:brainfunc()
-		execute_queues(self)
+		local tpos = tgtobj:get_pos()
+		local tyaw=minetest.dir_to_yaw(vector.direction(pos,tpos))	
+		mobkit.turn2yaw(self,tyaw,3)
+		local yaw = self.object:get_yaw()
+		if mobkit.timer(self,1) then
+			if not mobkit.is_in_deep(tgtobj) then return true end
+			local vel = self.object:get_velocity()
+			if tpos.y>pos.y+0.5 then self.object:set_velocity({x=vel.x,y=vel.y+0.5,z=vel.z})
+			elseif tpos.y<pos.y-0.5 then self.object:set_velocity({x=vel.x,y=vel.y-0.5,z=vel.z}) end
+		end
+		if mobkit.isnear3d(mobkit.pos_shift(pos,vector.multiply(minetest.yaw_to_dir(yaw),0.7)),tpos,0.35) then	--bite
+			tgtobj:punch(self.object,1,self.attack)
+			mobkit.hq_aqua_turn(self,prty,yaw-pi,speed)
+			return true
+		end
+		mobkit.go_forward_horizontal(self,yaw,speed)
 	end
-	
-	self.lastvelocity = self.object:get_velocity()
-	self.time_total=self.time_total+self.dtime
+	mobkit.queue_high(self,func,prty)
 end
