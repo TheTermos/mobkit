@@ -1365,10 +1365,6 @@ end
 local function aqua_radar_dumb(pos,yaw,range,reverse)
 	range = range or 4
 	
-	local function newpos(p,y,r)
-		return mobkit.pos_shift(p,vector.multiply(minetest.yaw_to_dir(y),r))
-	end
-	
 	local function okpos(p)
 		local node = mobkit.nodeatpos(p)
 		if node then 
@@ -1394,7 +1390,7 @@ local function aqua_radar_dumb(pos,yaw,range,reverse)
 		end
 	end
 	
-	local fpos = newpos(pos,yaw,range)
+	local fpos = mobkit.pos_translate2d(pos,yaw,range)
 	local ok,h = okpos(fpos)
 	if not ok then
 		local ffrom, fto, fstep
@@ -1404,9 +1400,9 @@ local function aqua_radar_dumb(pos,yaw,range,reverse)
 			ffrom, fto, fstep = 1,3,1
 		end
 		for i=ffrom, fto, fstep  do
-			local ok,h = okpos(newpos(pos,yaw+i,range))
+			local ok,h = okpos(mobkit.pos_translate2d(pos,yaw+i,range))
 			if ok then return yaw+i,h end
-			ok,h = okpos(newpos(pos,yaw-i,range))
+			ok,h = okpos(mobkit.pos_translate2d(pos,yaw-i,range))
 			if ok then return yaw-i,h end
 		end
 		return yaw+pi,h
