@@ -250,6 +250,9 @@ function mobkit.pos_shift(pos,vec)
 	-- returns pos shifted by vec
 	-- vec needn't have all three components given, absent components are assumed zero.
 	-- e.g pos_shift(pos,{y=1}) is valid
+
+function mobkit.pos_translate2d(pos,yaw,dist)
+	-- returns pos translated in the yaw direction by dist
 	
 function mobkit.get_stand_pos(thing)	
 	-- returns object pos projected onto the bottom collisionbox face
@@ -322,6 +325,9 @@ function mobkit.animate(self,anim)
 function mobkit.make_sound(self,sound)
 	-- sound is string, see entity definition
 	-- makes an entity play sound, or does nothing if not defined 
+	
+function mobkit.go_forward_horizontal(self,yaw,speed)
+	-- sets an entity's horizontal velocity in yaw direction. Vertical velocity unaffected.
 
 	
 -- Memory functions. 
@@ -433,6 +439,22 @@ function mobkit.hq_swimto(self,prty,tpos)
 	-- swim towards the position tpos, jump if necessary
 	-- returns if standing firmly on dry land
 	
+	Aquatic behaviors:
+	
+	Macros:
+function aqua_radar_dumb(pos,yaw,range,reverse)
+	-- assumes a mob will avoid shallows
+	-- checks if a pos in front of a moving entity swimmable
+	-- otherwise returns new position	
+	
+function mobkit.is_in_deep(target)
+	-- checks if an object is in water at least 2 nodes deep
+	
+	Hq Behaviors:
+function mobkit.hq_aqua_roam(self,prty,speed)
+function mobkit.hq_aqua_attack(self,prty,tgtobj,speed)
+function mobkit.hq_aqua_turn(self,prty,tyaw,speed)
+	-- used by both previous bhv
 	
 2.2.2 Low Level Behaviors --
 
