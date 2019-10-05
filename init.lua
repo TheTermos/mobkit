@@ -89,7 +89,7 @@ function mobkit.get_stand_pos(thing)	-- thing can be luaentity or objectref.
 	local colbox = {}
 	if type(thing) == 'table' then
 		pos = thing.object:get_pos()
-		colbox = thing.collisionbox
+		colbox = thing.object:get_properties().collisionbox
 	elseif type(thing) == 'userdata' then
 		pos = thing:get_pos()
 		colbox = thing:get_properties().collisionbox
@@ -329,6 +329,12 @@ function mobkit.isnear3d(p1,p2,thresh)
 	else
 		return false
 	end
+end
+
+function mobkit.get_box_height(thing)
+	if type(thing) == 'table' then thing = thing.object end
+	local colbox = thing:get_properties().collisionbox
+	return colbox[5]-colbox[2]
 end
 
 function mobkit.is_alive(thing)		-- thing can be luaentity or objectref.
@@ -778,12 +784,12 @@ function mobkit.actfunc(self, staticdata, dtime_s)
 	
 	self.oxygen = self.oxygen or self.lung_capacity
 	self.lastvelocity = {x=0,y=0,z=0}
-	self.height = self.collisionbox[5] - self.collisionbox[2]
 	self.sensefunc=sensors()
 end
 
 function mobkit.stepfunc(self,dtime)	-- not intended to be modified
 	self.dtime = dtime
+	self.height = mobkit.get_box_height(self)
 --  physics comes first
 --	self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
 	local vel = self.object:get_velocity()
@@ -878,7 +884,8 @@ function mobkit.stepfunc(self,dtime)	-- not intended to be modified
 		
 		-- vitals: oxygen
 		if self.lung_capacity then
-			local headnode = mobkit.nodeatpos(mobkit.pos_shift(self.object:get_pos(),{y=self.collisionbox[5]})) -- node at hitbox top
+			local colbox = self.object:get_properties().collisionbox
+			local headnode = mobkit.nodeatpos(mobkit.pos_shift(self.object:get_pos(),{y=colbox[5]})) -- node at hitbox top
 			if headnode and headnode.drawtype == 'liquid' then 
 				self.oxygen = self.oxygen - self.dtime
 			else
@@ -1286,7 +1293,7 @@ function mobkit.hq_attack(self,prty,tgtobj)
 				return true
 			else
 				mobkit.lq_turn2pos(self,tpos)
-				local height = tgtobj:is_player() and 0.8 or tgtobj:get_luaentity().height*0.6
+				local height = tgtobj:is_player() and 0.35 or tgtobj:get_luaentity().height*0.6
 				if tpos.y+height>pos.y then 
 					mobkit.lq_jumpattack(self,tpos.y+height-pos.y,tgtobj) 
 				else
@@ -1325,6 +1332,7 @@ function mobkit.hq_liquid_recovery(self,prty)	-- scan for nearest land
 end
 
 function mobkit.hq_swimto(self,prty,tpos)
+	local offset = self.object:get_properties().collisionbox[1]
 	local func = function(self)
 --		if not self.isinliquid and mobkit.is_queue_empty_low(self) then return true end
 		if not self.isinliquid and self.isonground then return true end
@@ -1337,7 +1345,6 @@ function mobkit.hq_swimto(self,prty,tpos)
 		
 		if mobkit.timer(self,1) then
 --perpendicular vectors: {-z,x};{z,-x}
-			local offset=self.collisionbox[1]
 			local pos1 = mobkit.pos_shift(mobkit.pos_shift(pos,{x=-dir.z*offset,z=dir.x*offset}),dir)
 			local h,l = mobkit.get_terrain_height(pos1)
 			if h and h>pos.y then
