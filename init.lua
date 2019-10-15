@@ -41,6 +41,10 @@ local neighbors ={
 	
 -- UTILITY FUNCTIONS
 
+function mobkit.dot(v1,v2)
+	return v1.x*v2.x+v1.y*v2.y+v1.z*v2.z
+end
+
 function mobkit.dir2neighbor(dir)
 	dir.y=0
 	dir=vector.round(vector.normalize(dir))
@@ -285,8 +289,8 @@ function mobkit.turn2yaw(self,tyaw,rate)
 		local nyaw = (yaw+step*dir)%(pi*2)
 		self.object:set_yaw(nyaw-pi)
 		
-		if nyaw==tyaw then return true
-		else return false end
+		if nyaw==tyaw then return true, nyaw-pi
+		else return false, nyaw-pi end
 end
 
 function mobkit.dir_to_rot(v,rot)
@@ -571,11 +575,22 @@ function mobkit.goto_next_waypoint(self,tpos)
 	return true
 end
 
-function mobkit.go_forward_horizontal(self,yaw,speed)	-- sets velocity in yaw direction, y component unaffected
+function mobkit.go_forward_horizontal(self,speed)	-- sets velocity in yaw direction, y component unaffected
 	local y = self.object:get_velocity().y
+	local yaw = self.object:get_yaw()
 	local vel = vector.multiply(minetest.yaw_to_dir(yaw),speed)
 	vel.y = y
 	self.object:set_velocity(vel)
+end
+
+function mobkit.drive_to_pos(self,tpos,speed,turn_rate,dist) 
+	local pos=self.object:get_pos()
+	dist = dist or 0.2
+	if mobkit.isnear2d(pos,tpos,dist) then return true end
+	local tyaw = minetest.dir_to_yaw(vector.direction(pos,tpos))
+	mobkit.turn2yaw(self,tyaw,turn_rate)
+	mobkit.go_forward_horizontal(self,speed)
+	return false
 end
 
 function mobkit.timer(self,s) -- returns true approx every s seconds
@@ -1469,8 +1484,8 @@ function mobkit.hq_aqua_roam(self,prty,speed)
 		end
 		
 		mobkit.turn2yaw(self,tyaw,3)
-		local yaw = self.object:get_yaw()
-		mobkit.go_forward_horizontal(self,yaw,speed)
+--		local yaw = self.object:get_yaw()
+		mobkit.go_forward_horizontal(self,speed)
 	end
 	mobkit.queue_high(self,func,prty)
 end
@@ -1478,8 +1493,8 @@ end
 function mobkit.hq_aqua_turn(self,prty,tyaw,speed)
 	local func = function(self)
 		local finished=mobkit.turn2yaw(self,tyaw)
-		local yaw = self.object:get_yaw()
-		mobkit.go_forward_horizontal(self,yaw,speed)
+--		local yaw = self.object:get_yaw()
+		mobkit.go_forward_horizontal(self,speed)
 		if finished then return true end
 	end
 	mobkit.queue_high(self,func,prty)
@@ -1530,7 +1545,7 @@ function mobkit.hq_aqua_attack(self,prty,tgtobj,speed)
 			mobkit.hq_aqua_turn(self,prty,yaw-pi,speed)
 			return true
 		end
-		mobkit.go_forward_horizontal(self,yaw,speed)
+		mobkit.go_forward_horizontal(self,speed)
 	end
 	mobkit.queue_high(self,func,prty)
 end
