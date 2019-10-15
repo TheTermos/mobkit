@@ -241,6 +241,13 @@ function mobkit.get_terrain_height(pos,steps)
 		-- surface height at pos, or nil if not found
 		-- liquid flag: true if found surface is covered with liquid 
 		
+function mobkit.turn2yaw(self,tyaw,rate)
+	-- gradually turns towards yaw
+	-- self: luaentity
+	-- tyaw: target yaw in radians
+	-- rate: turn rate in rads/s
+	--returns: true if facing tyaw; current yaw
+		
 function mobkit.timer(self,s) 
 	-- returns true approx every s seconds
 	-- used to reduce execution of code that needn't necessarily be done on every engine step
@@ -326,9 +333,15 @@ function mobkit.make_sound(self,sound)
 	-- sound is string, see entity definition
 	-- makes an entity play sound, or does nothing if not defined 
 	
-function mobkit.go_forward_horizontal(self,yaw,speed)
+function mobkit.go_forward_horizontal(self,speed)
 	-- sets an entity's horizontal velocity in yaw direction. Vertical velocity unaffected.
-
+	
+function mobkit.drive_to_pos(self,tpos,speed,turn_rate,dist) 
+	-- moves in facing direction while gradually turning towards tpos, returns true if in dist distance from tpos
+	-- tpos: target position
+	-- speed: in m/s
+	-- turn_rate: in rad/s
+	-- dist: in m.
 	
 -- Memory functions. 
 
