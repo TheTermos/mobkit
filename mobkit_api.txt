@@ -208,7 +208,7 @@ minetest.register_entity("mod:name",{
 		...
 		}
 	sounds = {
-		[name] = [string filename]					--single, simple,
+		[name] = [string filename],					--single, simple,
 		
 		[name] = {									--single, more powerful. All fields but 'name' are optional
 			name = [string filename],
@@ -217,8 +217,8 @@ minetest.register_entity("mod:name",{
 			pitch=[num or range],
 			max_distance=[num or range],
 			loop = [bool]
-			}
-			
+			},
+						
 		[name] = {
 			{										--variant, sound is chosen randomly
 			name = [string filename],
@@ -235,10 +235,11 @@ minetest.register_entity("mod:name",{
 			pitch=[num or range],
 			max_distance=[num or range],
 			loop = [bool]
-			}
-		}
+			},
+			...
+		},
 		...
-		}
+	},
 	max_speed = [num],					-- m/s
 	jump_height = [num],				-- nodes/meters
 	view_range = [num],					-- nodes/meters
