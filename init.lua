@@ -408,11 +408,76 @@ function mobkit.animate(self,anim)
 	end
 end
 
-function mobkit.make_sound(self,sound)
-	if self.sounds and self.sounds[sound] then
-		minetest.sound_play(self.sounds[sound], {object=self.object})
+--returns a random number inbetween l and r
+local function random_within_range(l, r)
+	local middle = (l + r) / 2
+	local offset = middle - l
+	
+	return  middle + (random() - 0.5) * 2 * offset
+end
+
+--returns val if val is a number, if it's a table, it treats the fields
+--x and y as an interval and returns a random number within it.
+--otherwise returns nil
+local function get_num_or_random_in_range(val)
+	if type(val) == "number" then
+		return val
+	elseif type(val) == "table" then
+		return random_within_range(val.x, val.y)
 	end
 end
+
+function mobkit.make_sound(self, sound)
+	if not (self.sounds and self.sounds[sound]) then
+		return
+	end
+	
+	local soundtype = type(self.sounds[sound])
+	
+	local name
+	local gain
+	local fade
+	local pitch
+	local max_hear_distance
+	local loop
+	
+	if soundtype == "string" then
+		name = self.sounds[sound]
+	else
+		assert(soundtype == "table",
+			"Invalid sound definition: type was '"
+			.. soundtype ..
+			"', must be 'string' or 'table'")
+		sound = self.sounds[sound]
+		
+		
+		--if multiple sounds are in the table, choose one randomly
+		if #sound > 0 then
+			sound = sound[random(#sound)]
+		end
+		
+		name = sound.name
+		
+		--if they are not set in the sound table, these are nil and
+		--minetest fills in the default values
+		gain = get_num_or_random_in_range(sound.gain)
+		fade = get_num_or_random_in_range(sound.fade)
+		pitch = get_num_or_random_in_range(sound.pitch)
+		max_hear_distance = get_num_or_random_in_range(sound.max_distance)
+		loop = sound.loop
+	end
+	
+	return minetest.sound_play(name,
+		{
+			object = self.object,
+			gain = gain,
+			fade = fade,
+			pitch = pitch,
+			max_hear_distance = max_hear_distance,
+			loop = loop,
+		})
+end
+
 
 function mobkit.is_neighbor_node_reachable(self,neighbor)	-- todo: take either number or pos
 	local offset = neighbors[neighbor]
