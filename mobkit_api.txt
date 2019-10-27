@@ -196,7 +196,7 @@ minetest.register_entity("mod:name",{
 	
 				-- optional mobkit props
 				-- or used by built in behaviors
-				
+	physics = [function user defined] 		-- optional, overrides built in physics			
 	animation = {
 		[name]={range={x=[num],y=[num]},speed=[num],loop=[bool]},		-- single
 		
@@ -223,16 +223,20 @@ minetest.register_entity("mod:name",{
 
 Some frequently used entity fields to be accessed directly for convenience
 
-	self.dtime		- dtime as passed to on_step
-	self.hp			- hitpoints
-	self.isonground	- true if pos.y remains unchanged for 2 consecutive steps
-	self.isinliquid	- true if the node at foot level is drawtype=='liquid'
+	self.dtime		-- max(dtime as passed to on_step,0.5) - limit of 0.05 to prevent jerkines on long steps.
+	self.hp			-- hitpoints
+	self.isonground		-- true if pos.y remains unchanged for 2 consecutive steps
+	self.isinliquid		-- true if the node at foot level is drawtype=='liquid'
 
 ------------
 2. Reference
 ------------
 
 2.1 Utility Functions
+
+function mobkit.minmax(v,m)
+	-- v,n: numbers
+	-- returns v trimmed to <-m,m> range
 
 function mobkit.get_terrain_height(pos,steps)
 	-- recursively search for walkable surface at pos.
