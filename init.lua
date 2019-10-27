@@ -844,6 +844,7 @@ end
 function mobkit.actfunc(self, staticdata, dtime_s)
 
 	self.logic = self.logic or self.brainfunc
+	self.physics = self.physics or mobkit.physics
 	
 	self.lqueue = {}
 	self.hqueue = {}
@@ -908,11 +909,11 @@ function mobkit.stepfunc(self,dtime)	-- not intended to be modified
 		self.isonground = false
 	end
 	
-	mobkit.physics(self)
+	self:physics(self)
 
 	if self.logic then
 		if self.view_range then self:sensefunc() end
-		self:logic()
+		self:logic(self)
 		execute_queues(self)
 	end
 	
