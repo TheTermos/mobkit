@@ -5,7 +5,7 @@ Contents
 		1.1.1 Low level functions
 		1.1.2 High level functions
 			1.1.2.1 Priority
-	1.2 Brain function
+	1.2 Logic function
 	1.3 Processing diagram
 	1.4 Entity definition
 	1.5 Exposed luaentity members 
@@ -100,7 +100,7 @@ hq_bhv1(self,prty):
 Particular prioritization scheme is to be designed by the user according to specific mod requirements.
 
 
-1.2 Brain function		
+1.2 Logic function		
 ------------------
 Every mob must have one. 
 Its job is managing high level behavior queue in response to events which are not intercepted by callbacks. 
@@ -141,7 +141,7 @@ end
 |				PHYSICS					|
 |										|
 |		 -----------------------		|
-|		| Brain Function		|		|
+|		| Logic Function		|		|
 |		 -----------------------		|
 |			  |							|
 |		 -----|-----------------		|
@@ -157,7 +157,7 @@ end
  ---------------------------------------
 
  Order of execution during an engine step:
- First comes physics: gravity, buoyancy, friction etc., then the brain function is called.
+ First comes physics: gravity, buoyancy, friction etc., then the logic function is called.
  After that, the first behavior on the high level queue, if exists, 
  and the last, the first low level behavior if present.
  
@@ -192,7 +192,7 @@ minetest.register_entity("mod:name",{
 	on_step = mobkit.stepfunc,	
 	on_activate = mobkit.actfunc,		
 	get_staticdata = mobkit.statfunc,
-	brainfunc = [function user defined],
+	logic = [function user defined],		-- older 'brainfunc' name works as well.
 	
 				-- optional mobkit props
 				-- or used by built in behaviors
@@ -376,8 +376,10 @@ function mobkit.get_queue_priority(self)
 	-- this is also the highest of all queued behaviors
 
 
--- Use these inside brain functions --
+-- Use these inside logic functions --
 
+function mobkit.vitals(self)
+	-- default drowning and fall damage, call it before hp check
 function mobkit.get_nearby_player(self)	
 	-- returns random player if nearby or nil
 function mobkit.get_nearby_entity(self,name)	
