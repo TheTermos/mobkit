@@ -12,6 +12,7 @@ mobkit.friction = 0.4	-- less is more
 local abs = math.abs
 local pi = math.pi
 local floor = math.floor
+local ceil = math.ceil
 local random = math.random
 local sqrt = math.sqrt
 local max = math.max
@@ -44,6 +45,11 @@ local neighbors ={
 function mobkit.dot(v1,v2)
 	return v1.x*v2.x+v1.y*v2.y+v1.z*v2.z
 end
+
+function mobkit.minmax(v,m)
+	return min(abs(v),m)*sign(v)
+end
+
 
 function mobkit.dir2neighbor(dir)
 	dir.y=0
@@ -101,6 +107,16 @@ function mobkit.get_stand_pos(thing)	-- thing can be luaentity or objectref.
 		return false
 	end
 	return mobkit.pos_shift(pos,{y=colbox[2]+0.01}), pos
+end
+
+function mobkit.set_acceleration(thing,vec,limit)
+	limit = limit or 100
+	if type(thing) == 'table' then thing=thing.object end
+	vec.x=mobkit.minmax(vec.x,limit)
+	vec.y=mobkit.minmax(vec.y,limit)
+	vec.z=mobkit.minmax(vec.z,limit)
+	
+	thing:set_acceleration(vec)
 end
 
 function mobkit.nodeatpos(pos)
@@ -378,17 +394,6 @@ function mobkit.heal(luaent,dmg)
 		luaent.hp = min(luaent.max_hp,(luaent.hp or 0) + dmg)
 	end
 end
-
--- function mobkit.animate(self,anim)
-	-- if self.animation and self.animation[anim] then
-		-- local crange = self.object:get_animation().range
-		-- if not crange
-		-- or crange.x ~= self.animation[anim].range.x
-		-- or crange.y ~= self.animation[anim].range.y then 	
-			-- self.object:set_animation(self.animation[anim].range,self.animation[anim].speed,0,self.animation[anim].loop)
-		-- end
-	-- end
--- end
 
 function mobkit.animate(self,anim)
 	if self.animation and self.animation[anim] then
@@ -746,6 +751,88 @@ function mobkit.default_brain(self)
 	if mobkit.is_queue_empty_high(self) then mobkit.hq_roam(self,0) end
 end
 
+function mobkit.physics(self)
+	local vel=self.object:get_velocity()
+		-- dumb friction
+	if self.isonground and not self.isinliquid then
+		self.object:set_velocity({x= vel.x> 0.2 and vel.x*mobkit.friction or 0,
+								y=vel.y,
+								z=vel.z > 0.2 and vel.z*mobkit.friction or 0})
+	end
+	
+	-- bounciness
+	if self.springiness and self.springiness > 0 then
+		local vnew = vector.new(vel)
+		
+		if not self.collided then						-- ugly workaround for inconsistent collisions
+			for _,k in ipairs({'y','z','x'}) do			
+				if vel[k]==0 and abs(self.lastvelocity[k])> 0.1 then 
+					vnew[k]=-self.lastvelocity[k]*self.springiness 
+				end
+			end
+		end
+		
+		if not vector.equals(vel,vnew) then
+			self.collided = true
+		else
+			if self.collided then
+				vnew = vector.new(self.lastvelocity)
+			end
+			self.collided = false
+		end
+		
+		self.object:set_velocity(vnew)
+	end
+	
+	-- buoyancy
+	local spos = mobkit.get_stand_pos(self)
+	spos.y = spos.y+0.01
+	-- get surface height
+	local surface = nil
+	local snodepos = mobkit.get_node_pos(spos)
+	local surfnode = mobkit.nodeatpos(spos)
+	while surfnode and surfnode.drawtype == 'liquid' do
+		surface = snodepos.y+0.5
+		if surface > spos.y+self.height then break end
+		snodepos.y = snodepos.y+1
+		surfnode = mobkit.nodeatpos(snodepos)
+	end
+	if surface then				-- standing in liquid
+		self.isinliquid = true
+		local submergence = min(surface-spos.y,self.height)
+		local balance = self.buoyancy*self.height
+		local buoyacc = mobkit.gravity*((balance - submergence)^2/balance^2*sign(balance - submergence))
+		mobkit.set_acceleration(self.object,
+			{x=-vel.x*self.water_drag,y=buoyacc-vel.y*abs(vel.y)*0.7,z=-vel.z*self.water_drag})
+	else
+		self.isinliquid = false
+		self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
+	end
+	
+end
+
+function mobkit.vitals(self)
+	-- vitals: fall damage
+	vel = self.object:get_velocity()
+	local velocity_delta = abs(self.lastvelocity.y - vel.y)
+	if velocity_delta > mobkit.safe_velocity then
+		self.hp = self.hp - floor(self.max_hp * min(1, velocity_delta/mobkit.terminal_velocity))
+	end
+	
+	-- vitals: oxygen
+	if self.lung_capacity then
+		local colbox = self.object:get_properties().collisionbox
+		local headnode = mobkit.nodeatpos(mobkit.pos_shift(self.object:get_pos(),{y=colbox[5]})) -- node at hitbox top
+		if headnode and headnode.drawtype == 'liquid' then 
+			self.oxygen = self.oxygen - self.dtime
+		else
+			self.oxygen = self.lung_capacity
+		end
+			
+		if self.oxygen <= 0 then self.hp=0 end	-- drown
+	end
+end
+
 function mobkit.statfunc(self)
 	local tmptab={}
 	tmptab.memory = self.memory
@@ -755,6 +842,9 @@ function mobkit.statfunc(self)
 end
 
 function mobkit.actfunc(self, staticdata, dtime_s)
+
+	self.logic = self.logic or self.brainfunc
+	
 	self.lqueue = {}
 	self.hqueue = {}
 	self.nearby_objects = {}
@@ -805,7 +895,7 @@ function mobkit.actfunc(self, staticdata, dtime_s)
 end
 
 function mobkit.stepfunc(self,dtime)	-- not intended to be modified
-	self.dtime = dtime
+	self.dtime = max(dtime,0.05)
 	self.height = mobkit.get_box_height(self)
 --  physics comes first
 --	self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
@@ -818,108 +908,16 @@ function mobkit.stepfunc(self,dtime)	-- not intended to be modified
 		self.isonground = false
 	end
 	
-	-- dumb friction
-	if self.isonground and not self.isinliquid then
-		self.object:set_velocity({x= vel.x> 0.2 and vel.x*mobkit.friction or 0,
-								y=vel.y,
-								z=vel.z > 0.2 and vel.z*mobkit.friction or 0})
-	end
-	
--- bounciness
-	if self.springiness and self.springiness > 0 then
-		local vnew = vector.new(vel)
-		
-		if not self.collided then						-- ugly workaround for inconsistent collisions
-			for _,k in ipairs({'y','z','x'}) do			
-				if vel[k]==0 and abs(self.lastvelocity[k])> 0.1 then 
-					vnew[k]=-self.lastvelocity[k]*self.springiness 
-				end
-			end
-		end
-		
-		if not vector.equals(vel,vnew) then
-			self.collided = true
-		else
-			if self.collided then
-				vnew = vector.new(self.lastvelocity)
-			end
-			self.collided = false
-		end
-		
-		self.object:set_velocity(vnew)
-	end
-	
-	-- buoyancy
-	local spos = mobkit.get_stand_pos(self)
-	spos.y = spos.y+0.01
-	-- get surface height
---	local surface = mobkit.get_node_pos(spos).y+0.5
-	local surface = nil
-	local snodepos = mobkit.get_node_pos(spos)
-	local surfnode = mobkit.nodeatpos(spos)
-	while surfnode and surfnode.drawtype == 'liquid' do
-		surface = snodepos.y+0.5
-		if surface > spos.y+self.height then break end
-		snodepos.y = snodepos.y+1
-		surfnode = mobkit.nodeatpos(snodepos)
-	end
-	if surface then				-- standing in liquid
-		self.isinliquid = true
-		local submergence = min(surface-spos.y,self.height)
-		local balance = self.buoyancy*self.height
-		local buoyacc = mobkit.gravity*((balance - submergence)^2/balance^2*sign(balance - submergence))
-		self.object:set_acceleration({x=-vel.x*self.water_drag,y=buoyacc-vel.y*abs(vel.y)*0.7,z=-vel.z*self.water_drag})
-	else
-		self.isinliquid = false
-		self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
-	end
-	
-	
-	
-	-- local footnode = mobkit.nodeatpos(spos)
-	-- local headnode
-	-- if footnode and footnode.drawtype == 'liquid' then
-		
-		-- vel = self.object:get_velocity()
-		-- headnode = mobkit.nodeatpos(mobkit.pos_shift(spos,{y=self.height or 0}))	-- TODO: height may be nil
-		-- local submergence = headnode.drawtype=='liquid' 
-			-- and	self.buoyancy-1
-			-- or (self.buoyancy*self.height-(1-(spos.y+0.5)%1))^2/(self.buoyancy*self.height)^2*sign(self.buoyancy*self.height-(1-(spos.y+0.5)%1))
+	mobkit.physics(self)
 
-		-- local buoyacc = submergence * mobkit.gravity
-		-- self.object:set_acceleration({x=-vel.x,y=buoyacc-vel.y*abs(vel.y)*0.5,z=-vel.z})
-
-	-- end
-
-	if self.brainfunc then
-		-- vitals: fall damage
-		vel = self.object:get_velocity()
-		local velocity_delta = abs(self.lastvelocity.y - vel.y)
-		if velocity_delta > mobkit.safe_velocity then
-			self.hp = self.hp - floor((self.max_hp-100) * min(1, velocity_delta/mobkit.terminal_velocity))
-		end
-		
-		-- vitals: oxygen
-		if self.lung_capacity then
-			local colbox = self.object:get_properties().collisionbox
-			local headnode = mobkit.nodeatpos(mobkit.pos_shift(self.object:get_pos(),{y=colbox[5]})) -- node at hitbox top
-			if headnode and headnode.drawtype == 'liquid' then 
-				self.oxygen = self.oxygen - self.dtime
-			else
-				self.oxygen = self.lung_capacity
-			end
-				
-			if self.oxygen <= 0 then self.hp=0 end	-- drown
-		end
-
-		
+	if self.logic then
 		if self.view_range then self:sensefunc() end
-		self:brainfunc()
+		self:logic()
 		execute_queues(self)
 	end
 	
 	self.lastvelocity = self.object:get_velocity()
-	self.time_total=self.time_total+self.dtime
+	self.time_total=self.time_total+dtime
 end
 
 ----------------------------
@@ -1007,7 +1005,7 @@ function mobkit.lq_dumbjump(self,height,anim)
 				dir = vector.multiply(dir,3)
 			end
 			dir.y = vel.y
-			self.object:set_velocity(dir,yaw)
+			self.object:set_velocity(dir)
 		end
 	end
 	mobkit.queue_low(self,func)
@@ -1051,6 +1049,7 @@ end
 
 function mobkit.lq_jumpattack(self,height,target)
 	local phase=1		
+	local timer=0.5
 	local tgtbox = target:get_properties().collisionbox
 	local func=function(self)
 		if not mobkit.is_alive(target) then return true end
@@ -1062,6 +1061,7 @@ function mobkit.lq_jumpattack(self,height,target)
 				mobkit.make_sound(self,'charge')
 				phase=2
 			else
+				mobkit.lq_idle(self,0.3)
 				return true
 			end
 		elseif phase==2 then
@@ -1114,7 +1114,7 @@ end
 -- HIGH LEVEL QUEUE FUNCTIONS
 -----------------------------
 
-function mobkit.dumbstep(self,height,tpos,speed_factor)
+function mobkit.dumbstep(self,height,tpos,speed_factor,idle_duration)
 	if height <= 0.001 then
 		mobkit.lq_turn2pos(self,tpos) 
 		mobkit.lq_dumbwalk(self,tpos,speed_factor)
@@ -1122,7 +1122,8 @@ function mobkit.dumbstep(self,height,tpos,speed_factor)
 		mobkit.lq_turn2pos(self,tpos) 
 		mobkit.lq_dumbjump(self,height) 
 	end
-	mobkit.lq_idle(self,random(1,6))
+	idle_duration = idle_duration or 6
+	mobkit.lq_idle(self,random(ceil(idle_duration*0.5),idle_duration))
 end
 
 function mobkit.hq_roam(self,prty)
@@ -1289,7 +1290,7 @@ function mobkit.hq_die(self)
 	local func = function(self)
 		if start then 
 			mobkit.lq_fallover(self) 
-			self.brainfunc = function(self) end	-- brain dead as well
+			self.logic = function(self) end	-- brain dead as well
 			start=false
 		end
 		timer = timer-self.dtime
