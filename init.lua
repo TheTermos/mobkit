@@ -909,11 +909,11 @@ function mobkit.stepfunc(self,dtime)	-- not intended to be modified
 		self.isonground = false
 	end
 	
-	self:physics(self)
+	self:physics()
 
 	if self.logic then
 		if self.view_range then self:sensefunc() end
-		self:logic(self)
+		self:logic()
 		execute_queues(self)
 	end
 	
