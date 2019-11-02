@@ -408,74 +408,25 @@ function mobkit.animate(self,anim)
 	end
 end
 
---returns a random number inbetween l and r
-local function random_within_range(l, r)
-	local middle = (l + r) / 2
-	local offset = middle - l
-	
-	return  middle + (random() - 0.5) * 2 * offset
-end
-
---returns val if val is a number, if it's a table, it treats the fields
---x and y as an interval and returns a random number within it.
---otherwise returns nil
-local function get_num_or_random_in_range(val)
-	if type(val) == "number" then
-		return val
-	elseif type(val) == "table" then
-		return random_within_range(val.x, val.y)
-	end
-end
-
 function mobkit.make_sound(self, sound)
-	if not (self.sounds and self.sounds[sound]) then
-		return
-	end
+	local spec = self.sounds[sound]
+	local param_table = {object=self.object}
 	
-	local soundtype = type(self.sounds[sound])
-	
-	local name
-	local gain
-	local fade
-	local pitch
-	local max_hear_distance
-	local loop
-	
-	if soundtype == "string" then
-		name = self.sounds[sound]
-	else
-		assert(soundtype == "table",
-			"Invalid sound definition: type was '"
-			.. soundtype ..
-			"', must be 'string' or 'table'")
-		sound = self.sounds[sound]
+	if type(spec) == 'table' then
+		--pick random sound if it's a spec for random sounds
+		if #spec > 0 then spec = spec[random(#spec)] end
 		
-		
-		--if multiple sounds are in the table, choose one randomly
-		if #sound > 0 then
-			sound = sound[random(#sound)]
+		--returns value or a random value within the range [value[1], value[2])
+		local function in_range(value)
+			return type(value) == 'table' and value[1]+random()*(value[2]-value[1]) or value
 		end
 		
-		name = sound.name
-		
-		--if they are not set in the sound table, these are nil and
-		--minetest fills in the default values
-		gain = get_num_or_random_in_range(sound.gain)
-		fade = get_num_or_random_in_range(sound.fade)
-		pitch = get_num_or_random_in_range(sound.pitch)
-		max_hear_distance = get_num_or_random_in_range(sound.max_distance)
-		loop = sound.loop
+		--pick random values within a range if they're a table
+		param_table.gain = in_range(spec.gain)
+		param_table.fade = in_range(spec.fade)
+		param_table.pitch = in_range(spec.pitch)
 	end
-	
-	return minetest.sound_play(name,
-		{
-			object = self.object,
-			gain = gain,
-			fade = fade,
-			pitch = pitch,
-			max_hear_distance = max_hear_distance,
-			loop = loop,
-		})
+	return minetest.sound_play(spec, param_table)
 end
 
 
