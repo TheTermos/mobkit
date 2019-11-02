@@ -413,11 +413,27 @@ function mobkit.animate(self,anim)
 	end
 end
 
-function mobkit.make_sound(self,sound)
-	if self.sounds and self.sounds[sound] then
-		minetest.sound_play(self.sounds[sound], {object=self.object})
+function mobkit.make_sound(self, sound)
+	local spec = self.sounds[sound]
+	local param_table = {object=self.object}
+	
+	if type(spec) == 'table' then
+		--pick random sound if it's a spec for random sounds
+		if #spec > 0 then spec = spec[random(#spec)] end
+		
+		--returns value or a random value within the range [value[1], value[2])
+		local function in_range(value)
+			return type(value) == 'table' and value[1]+random()*(value[2]-value[1]) or value
+		end
+		
+		--pick random values within a range if they're a table
+		param_table.gain = in_range(spec.gain)
+		param_table.fade = in_range(spec.fade)
+		param_table.pitch = in_range(spec.pitch)
 	end
+	return minetest.sound_play(spec, param_table)
 end
+
 
 function mobkit.is_neighbor_node_reachable(self,neighbor)	-- todo: take either number or pos
 	local offset = neighbors[neighbor]

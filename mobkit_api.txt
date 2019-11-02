@@ -208,9 +208,32 @@ minetest.register_entity("mod:name",{
 		...
 		}
 	sounds = {
-		[name] = [string filename],
+		[name] = [string filename],				--single, simple,
+		
+		[name] = {								--single, more powerful. All fields but 'name' are optional
+			name = [string filename],
+			gain=[num or range],				--range is a table of the format {left_bound, right_bound}
+			fade=[num or range],
+			pitch=[num or range],
+			},
+						
+		[name] = {								--variant, sound is chosen randomly
+			{
+			name = [string filename],
+			gain=[num or range],
+			fade=[num or range],
+			pitch=[num or range],
+			},
+			{
+			name = [string filename],
+			gain=[num or range],
+			fade=[num or range],
+			pitch=[num or range],
+			},
+			...
+		},
 		...
-		}
+	},
 	max_speed = [num],					-- m/s
 	jump_height = [num],				-- nodes/meters
 	view_range = [num],					-- nodes/meters
@@ -335,7 +358,8 @@ function mobkit.animate(self,anim)
 	
 function mobkit.make_sound(self,sound)
 	-- sound is string, see entity definition
-	-- makes an entity play sound, or does nothing if not defined 
+	-- makes an entity play sound, or does nothing if not defined
+	--returns sound handle
 	
 function mobkit.go_forward_horizontal(self,speed)
 	-- sets an entity's horizontal velocity in yaw direction. Vertical velocity unaffected.
