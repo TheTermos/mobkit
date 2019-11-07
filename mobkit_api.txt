@@ -319,6 +319,9 @@ function mobkit.isnear3d(p1,p2,thresh)
 function mobkit.dir_to_rot(v,rot)
 	-- converts a 3d vector v to rotation like in set_rotation() object method
 	-- rot (optional) is current object rotation
+	
+function mobkit.rot_to_dir(rot)
+	-- converts minetest rotation vector (pitch,yaw,roll) to direction unit vector 
 
 function mobkit.is_alive(thing)		
 	-- non essential, checks if thing exists in the world and is alive
