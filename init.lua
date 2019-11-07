@@ -17,6 +17,7 @@ local random = math.random
 local sqrt = math.sqrt
 local max = math.max
 local min = math.min
+local tan = math.tan
 local pow = math.pow
 
 local sign = function(x)
@@ -314,6 +315,12 @@ function mobkit.dir_to_rot(v,rot)
 	return {x = (v.x==0 and v.y==0 and v.z==0) and rot.x or math.atan2(v.y,vector.length({x=v.x,y=0,z=v.z})),
 			y = (v.x==0 and v.z==0) and rot.y or minetest.dir_to_yaw(v),
 			z=rot.z}
+end
+
+function mobkit.rot_to_dir(rot) -- keep rot within <-pi/2,pi/2>
+	local dir = minetest.yaw_to_dir(rot.y)
+	dir.y = dir.y+tan(rot.x)*vector.length(dir)
+	return vector.normalize(dir)
 end
 
 function mobkit.isnear2d(p1,p2,thresh)
@@ -815,11 +822,11 @@ function mobkit.physics(self)
 	end
 	if surface then				-- standing in liquid
 		self.isinliquid = true
-		local submergence = min(surface-spos.y,self.height)
-		local balance = self.buoyancy*self.height
-		local buoyacc = mobkit.gravity*((balance - submergence)^2/balance^2*sign(balance - submergence))
+		local submergence = min(surface-spos.y,self.height)/self.height
+--		local balance = self.buoyancy*self.height
+		local buoyacc = mobkit.gravity*(self.buoyancy-submergence)
 		mobkit.set_acceleration(self.object,
-			{x=-vel.x*self.water_drag,y=buoyacc-vel.y*abs(vel.y)*0.7,z=-vel.z*self.water_drag})
+			{x=-vel.x*self.water_drag,y=buoyacc-vel.y*abs(vel.y)*0.4,z=-vel.z*self.water_drag})
 	else
 		self.isinliquid = false
 		self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
@@ -919,7 +926,8 @@ function mobkit.stepfunc(self,dtime)	-- not intended to be modified
 	local vel = self.object:get_velocity()
 	
 --	if self.lastvelocity.y == vel.y then
-	if abs(self.lastvelocity.y-vel.y)<0.001 then
+--	if abs(self.lastvelocity.y-vel.y)<0.001 then
+	if self.lastvelocity.y==0 and vel.y==0 then
 		self.isonground = true
 	else
 		self.isonground = false
@@ -934,7 +942,7 @@ function mobkit.stepfunc(self,dtime)	-- not intended to be modified
 	end
 	
 	self.lastvelocity = self.object:get_velocity()
-	self.time_total=self.time_total+dtime
+	self.time_total=self.time_total+self.dtime
 end
 
 ----------------------------
