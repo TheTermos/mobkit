@@ -428,15 +428,11 @@ function mobkit.make_sound(self,sound)
 end  --]]	
 
 function mobkit.make_sound(self, sound)
-	local spec = self.sounds[sound]
+	local spec = self.sounds and self.sounds[sound]
 	local param_table = {object=self.object}
-	
-minetest.chat_send_all(tostring(self.sounds[sound]))
-minetest.chat_send_all(tostring(spec))
 	
 	if type(spec) == 'table' then
 		--pick random sound if it's a spec for random sounds
---		spec = table.copy(spec)
 		if #spec > 0 then spec = spec[random(#spec)] end
 		
 		--returns value or a random value within the range [value[1], value[2])
@@ -449,9 +445,9 @@ minetest.chat_send_all(tostring(spec))
 		param_table.fade = in_range(spec.fade)
 		param_table.pitch = in_range(spec.pitch)
 	end
-
 	return minetest.sound_play(spec, param_table)
 end
+
 
 function mobkit.is_neighbor_node_reachable(self,neighbor)	-- todo: take either number or pos
 	local offset = neighbors[neighbor]
