@@ -414,7 +414,7 @@ function mobkit.animate(self,anim)
 end
 
 function mobkit.make_sound(self, sound)
-	local spec = self.sounds[sound]
+	local spec = self.sounds and self.sounds[sound]
 	local param_table = {object=self.object}
 	
 	if type(spec) == 'table' then
