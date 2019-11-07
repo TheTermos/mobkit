@@ -17,6 +17,7 @@ local random = math.random
 local sqrt = math.sqrt
 local max = math.max
 local min = math.min
+local tan = math.tan
 local pow = math.pow
 
 local sign = function(x)
@@ -316,6 +317,12 @@ function mobkit.dir_to_rot(v,rot)
 			z=rot.z}
 end
 
+function mobkit.rot_to_dir(rot) -- keep rot within <-pi/2,pi/2>
+	local dir = minetest.yaw_to_dir(rot.y)
+	dir.y = dir.y+tan(rot.x)*vector.length(dir)
+	return vector.normalize(dir)
+end
+
 function mobkit.isnear2d(p1,p2,thresh)
 	if abs(p2.x-p1.x) < thresh and abs(p2.z-p1.z) < thresh then
 		return true
@@ -413,12 +420,23 @@ function mobkit.animate(self,anim)
 	end
 end
 
+--[[
+function mobkit.make_sound(self,sound)
+	if self.sounds and self.sounds[sound] then
+		minetest.sound_play(self.sounds[sound], {object=self.object})
+	end
+end  --]]	
+
 function mobkit.make_sound(self, sound)
-	local spec = self.sounds and self.sounds[sound]
+	local spec = self.sounds[sound]
 	local param_table = {object=self.object}
+	
+minetest.chat_send_all(tostring(self.sounds[sound]))
+minetest.chat_send_all(tostring(spec))
 	
 	if type(spec) == 'table' then
 		--pick random sound if it's a spec for random sounds
+--		spec = table.copy(spec)
 		if #spec > 0 then spec = spec[random(#spec)] end
 		
 		--returns value or a random value within the range [value[1], value[2])
@@ -431,9 +449,9 @@ function mobkit.make_sound(self, sound)
 		param_table.fade = in_range(spec.fade)
 		param_table.pitch = in_range(spec.pitch)
 	end
+
 	return minetest.sound_play(spec, param_table)
 end
-
 
 function mobkit.is_neighbor_node_reachable(self,neighbor)	-- todo: take either number or pos
 	local offset = neighbors[neighbor]
@@ -815,11 +833,11 @@ function mobkit.physics(self)
 	end
 	if surface then				-- standing in liquid
 		self.isinliquid = true
-		local submergence = min(surface-spos.y,self.height)
-		local balance = self.buoyancy*self.height
-		local buoyacc = mobkit.gravity*((balance - submergence)^2/balance^2*sign(balance - submergence))
+		local submergence = min(surface-spos.y,self.height)/self.height
+--		local balance = self.buoyancy*self.height
+		local buoyacc = mobkit.gravity*(self.buoyancy-submergence)
 		mobkit.set_acceleration(self.object,
-			{x=-vel.x*self.water_drag,y=buoyacc-vel.y*abs(vel.y)*0.7,z=-vel.z*self.water_drag})
+			{x=-vel.x*self.water_drag,y=buoyacc-vel.y*abs(vel.y)*0.4,z=-vel.z*self.water_drag})
 	else
 		self.isinliquid = false
 		self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
@@ -919,7 +937,8 @@ function mobkit.stepfunc(self,dtime)	-- not intended to be modified
 	local vel = self.object:get_velocity()
 	
 --	if self.lastvelocity.y == vel.y then
-	if abs(self.lastvelocity.y-vel.y)<0.001 then
+--	if abs(self.lastvelocity.y-vel.y)<0.001 then
+	if self.lastvelocity.y==0 and vel.y==0 then
 		self.isonground = true
 	else
 		self.isonground = false
@@ -934,7 +953,7 @@ function mobkit.stepfunc(self,dtime)	-- not intended to be modified
 	end
 	
 	self.lastvelocity = self.object:get_velocity()
-	self.time_total=self.time_total+dtime
+	self.time_total=self.time_total+self.dtime
 end
 
 ----------------------------
