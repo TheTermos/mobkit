@@ -420,13 +420,6 @@ function mobkit.animate(self,anim)
 	end
 end
 
---[[
-function mobkit.make_sound(self,sound)
-	if self.sounds and self.sounds[sound] then
-		minetest.sound_play(self.sounds[sound], {object=self.object})
-	end
-end  --]]	
-
 function mobkit.make_sound(self, sound)
 	local spec = self.sounds and self.sounds[sound]
 	local param_table = {object=self.object}
