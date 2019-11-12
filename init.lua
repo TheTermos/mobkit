@@ -538,8 +538,8 @@ function mobkit.get_next_waypoint(self,tpos)
 			end
 		end
 		--scan rear
-		height, pos2, liq = mobkit.is_neighbor_node_reachable(self,mobkit.neighbor_shift(neighbor,4))
-		if height and not liq 
+		height, pos2, liquidflag = mobkit.is_neighbor_node_reachable(self,mobkit.neighbor_shift(neighbor,4))
+		if height and not liquidflag 
 		and not (nogopos and mobkit.isnear2d(pos2,nogopos,0.1)) then
 			update_pos_history(self,pos2)
 			return height,pos2 
@@ -836,7 +836,7 @@ end
 
 function mobkit.vitals(self)
 	-- vitals: fall damage
-	vel = self.object:get_velocity()
+	local vel = self.object:get_velocity()
 	local velocity_delta = abs(self.lastvelocity.y - vel.y)
 	if velocity_delta > mobkit.safe_velocity then
 		self.hp = self.hp - floor(self.max_hp * min(1, velocity_delta/mobkit.terminal_velocity))
@@ -1277,8 +1277,8 @@ function mobkit.hq_hunt(self,prty,tgtobj)
 end
 
 function mobkit.hq_warn(self,prty,tgtobj)
-	timer=0
-	tgttime = 0
+	local timer=0
+	local tgttime = 0
 	local func = function(self)
 		if not mobkit.is_alive(tgtobj) then return true end
 		local pos = mobkit.get_stand_pos(self)
