@@ -919,7 +919,7 @@ function mobkit.actfunc(self, staticdata, dtime_s)
 end
 
 function mobkit.stepfunc(self,dtime)	-- not intended to be modified
-	self.dtime = max(dtime,0.05)
+	self.dtime = min(dtime,0.2)
 	self.height = mobkit.get_box_height(self)
 --  physics comes first
 --	self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
