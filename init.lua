@@ -361,7 +361,11 @@ end
 function mobkit.get_box_height(thing)
 	if type(thing) == 'table' then thing = thing.object end
 	local colbox = thing:get_properties().collisionbox
-	return colbox[5]-colbox[2]
+	local height
+	if colbox then height = colbox[5]-colbox[2] 
+	else height = 0.1 end
+	
+	return height > 0 and height or 0.1
 end
 
 function mobkit.is_alive(thing)		-- thing can be luaentity or objectref.
@@ -440,7 +444,6 @@ function mobkit.make_sound(self, sound)
 	end
 	return minetest.sound_play(spec, param_table)
 end
-
 
 function mobkit.is_neighbor_node_reachable(self,neighbor)	-- todo: take either number or pos
 	local offset = neighbors[neighbor]
@@ -808,10 +811,10 @@ function mobkit.physics(self)
 	end
 	
 	-- buoyancy
+	local surface = nil
 	local spos = mobkit.get_stand_pos(self)
 	spos.y = spos.y+0.01
 	-- get surface height
-	local surface = nil
 	local snodepos = mobkit.get_node_pos(spos)
 	local surfnode = mobkit.nodeatpos(spos)
 	while surfnode and surfnode.drawtype == 'liquid' do
@@ -913,6 +916,7 @@ function mobkit.actfunc(self, staticdata, dtime_s)
 	self.armor_groups.immortal = 1
 	self.object:set_armor_groups(self.armor_groups)
 	
+	self.buoyancy = self.buoyancy or 0
 	self.oxygen = self.oxygen or self.lung_capacity
 	self.lastvelocity = {x=0,y=0,z=0}
 	self.sensefunc=sensors()
@@ -921,6 +925,7 @@ end
 function mobkit.stepfunc(self,dtime)	-- not intended to be modified
 	self.dtime = min(dtime,0.2)
 	self.height = mobkit.get_box_height(self)
+	
 --  physics comes first
 --	self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
 	local vel = self.object:get_velocity()
