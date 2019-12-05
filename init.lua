@@ -449,7 +449,8 @@ function mobkit.is_neighbor_node_reachable(self,neighbor)	-- todo: take either n
 	local offset = neighbors[neighbor]
 	local pos=mobkit.get_stand_pos(self)
 	local tpos = mobkit.get_node_pos(mobkit.pos_shift(pos,offset))
-	local height, liquidflag = mobkit.get_terrain_height(tpos)
+	local recursteps = ceil(self.jump_height)+1
+	local height, liquidflag = mobkit.get_terrain_height(tpos,recursteps)
 
 	if height and abs(height-pos.y) <= self.jump_height then
 		tpos.y = height
@@ -460,12 +461,12 @@ function mobkit.is_neighbor_node_reachable(self,neighbor)	-- todo: take either n
 			local n2 = neighbor-1				-- left neighbor never < 0
 			offset = neighbors[n2]
 			local t2 = mobkit.get_node_pos(mobkit.pos_shift(pos,offset))
-			local h2 = mobkit.get_terrain_height(t2)
+			local h2 = mobkit.get_terrain_height(t2,recursteps)
 			if h2 and h2 - pos.y > 0.02 then return end
 			n2 = (neighbor+1)%8 		-- right neighbor
 			offset = neighbors[n2]
 			t2 = mobkit.get_node_pos(mobkit.pos_shift(pos,offset))
-			h2 = mobkit.get_terrain_height(t2)
+			h2 = mobkit.get_terrain_height(t2,recursteps)
 			if h2 and h2 - pos.y > 0.02 then return end
 		end
 	
@@ -812,6 +813,7 @@ function mobkit.physics(self)
 	
 	-- buoyancy
 	local surface = nil
+	local surfnodename = nil
 	local spos = mobkit.get_stand_pos(self)
 	spos.y = spos.y+0.01
 	-- get surface height
@@ -822,16 +824,18 @@ function mobkit.physics(self)
 		if surface > spos.y+self.height then break end
 		snodepos.y = snodepos.y+1
 		surfnode = mobkit.nodeatpos(snodepos)
+		surfnodename = surfnode.name
 	end
+	self.isinliquid = surfnodename
 	if surface then				-- standing in liquid
-		self.isinliquid = true
+--		self.isinliquid = true
 		local submergence = min(surface-spos.y,self.height)/self.height
 --		local balance = self.buoyancy*self.height
 		local buoyacc = mobkit.gravity*(self.buoyancy-submergence)
 		mobkit.set_acceleration(self.object,
 			{x=-vel.x*self.water_drag,y=buoyacc-vel.y*abs(vel.y)*0.4,z=-vel.z*self.water_drag})
 	else
-		self.isinliquid = false
+--		self.isinliquid = false
 		self.object:set_acceleration({x=0,y=mobkit.gravity,z=0})
 	end
 	
