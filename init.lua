@@ -892,15 +892,15 @@ function mobkit.actfunc(self, staticdata, dtime_s)
 		end
 	end
 	
-	if self.timeout and self.timeout>0 and dtime_s > self.timeout and next(self.memory)==nil then
-		self.object:remove()
-	end
-	
 	if not self.memory then 		-- this is the initial activation
 		self.memory = {} 
 		
 		-- texture variation
 		if #self.textures > 1 then self.texture_no = random(#self.textures) end
+	end
+	
+	if self.timeout and self.timeout>0 and dtime_s > self.timeout and next(self.memory)==nil then
+		self.object:remove()
 	end
 	
 	-- apply texture
