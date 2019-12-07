@@ -824,7 +824,7 @@ function mobkit.physics(self)
 		if surface > spos.y+self.height then break end
 		snodepos.y = snodepos.y+1
 		surfnode = mobkit.nodeatpos(snodepos)
-		surfnodename = surfnode.name
+		if surfnode then surfnodename = surfnode.name end
 	end
 	self.isinliquid = surfnodename
 	if surface then				-- standing in liquid
