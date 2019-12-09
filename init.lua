@@ -820,11 +820,11 @@ function mobkit.physics(self)
 	local snodepos = mobkit.get_node_pos(spos)
 	local surfnode = mobkit.nodeatpos(spos)
 	while surfnode and surfnode.drawtype == 'liquid' do
+		surfnodename = surfnode.name
 		surface = snodepos.y+0.5
 		if surface > spos.y+self.height then break end
 		snodepos.y = snodepos.y+1
 		surfnode = mobkit.nodeatpos(snodepos)
-		surfnodename = surfnode.name
 	end
 	self.isinliquid = surfnodename
 	if surface then				-- standing in liquid
@@ -892,15 +892,15 @@ function mobkit.actfunc(self, staticdata, dtime_s)
 		end
 	end
 	
-	if self.timeout and self.timeout>0 and dtime_s > self.timeout and next(self.memory)==nil then
-		self.object:remove()
-	end
-	
 	if not self.memory then 		-- this is the initial activation
 		self.memory = {} 
 		
 		-- texture variation
 		if #self.textures > 1 then self.texture_no = random(#self.textures) end
+	end
+	
+	if self.timeout and self.timeout>0 and dtime_s > self.timeout and next(self.memory)==nil then
+		self.object:remove()
 	end
 	
 	-- apply texture
