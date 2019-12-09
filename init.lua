@@ -820,11 +820,11 @@ function mobkit.physics(self)
 	local snodepos = mobkit.get_node_pos(spos)
 	local surfnode = mobkit.nodeatpos(spos)
 	while surfnode and surfnode.drawtype == 'liquid' do
+		surfnodename = surfnode.name
 		surface = snodepos.y+0.5
 		if surface > spos.y+self.height then break end
 		snodepos.y = snodepos.y+1
 		surfnode = mobkit.nodeatpos(snodepos)
-		if surfnode then surfnodename = surfnode.name end
 	end
 	self.isinliquid = surfnodename
 	if surface then				-- standing in liquid
