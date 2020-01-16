@@ -147,9 +147,7 @@ function mobkit.get_nodes_in_area(pos1,pos2,full)
 	local sy = (pos2.y<pos1.y) and -1 or 1
 
 	local x=npos1.x-sx
-	local z=npos1.z-sz
-	local y=npos1.y-sy
-
+	local y, z
 	repeat
 		x=x+sx
 		z=npos1.z-sz
@@ -526,15 +524,15 @@ function mobkit.get_next_waypoint(self,tpos)
 
 		for i=1,3 do
 			-- scan left
-			local height, pos2, liq = mobkit.is_neighbor_node_reachable(self,mobkit.neighbor_shift(neighbor,-i*self.path_dir))
-			if height and not liq
+			height, pos2, liquidflag = mobkit.is_neighbor_node_reachable(self,mobkit.neighbor_shift(neighbor,-i*self.path_dir))
+			if height and not liquidflag
 			and not (nogopos and mobkit.isnear2d(pos2,nogopos,0.1)) then
 				update_pos_history(self,pos2)
 				return height,pos2
 			end
 			-- scan right
-			height, pos2, liq = mobkit.is_neighbor_node_reachable(self,mobkit.neighbor_shift(neighbor,i*self.path_dir))
-			if height and not liq
+			height, pos2, liquidflag = mobkit.is_neighbor_node_reachable(self,mobkit.neighbor_shift(neighbor,i*self.path_dir))
+			if height and not liquidflag
 			and not (nogopos and mobkit.isnear2d(pos2,nogopos,0.1)) then
 				update_pos_history(self,pos2)
 				return height,pos2
@@ -553,7 +551,7 @@ function mobkit.get_next_waypoint(self,tpos)
 	self.path_dir = self.path_dir*-1	-- subtle change in pathfinding
 end
 
-function mobkit.get_next_waypoint_fast(self,tpos,nogopos)
+function mobkit.get_next_waypoint_fast(self,tpos,_)
 	local pos = mobkit.get_stand_pos(self)
 	local dir=vector.direction(pos,tpos)
 	local neighbor = mobkit.dir2neighbor(dir)
@@ -578,11 +576,11 @@ function mobkit.get_next_waypoint_fast(self,tpos,nogopos)
 
 		for i=1,4 do
 			-- scan left
-			height, pos2, liq = mobkit.is_neighbor_node_reachable(self,mobkit.neighbor_shift(neighbor,-i))
-			if height and not liq then return height,pos2 end
+			height, pos2, liquidflag = mobkit.is_neighbor_node_reachable(self,mobkit.neighbor_shift(neighbor,-i))
+			if height and not liquidflag then return height,pos2 end
 			-- scan right
-			height, pos2, liq = mobkit.is_neighbor_node_reachable(self,mobkit.neighbor_shift(neighbor,i))
-			if height and not liq then return height,pos2 end
+			height, pos2, liquidflag = mobkit.is_neighbor_node_reachable(self,mobkit.neighbor_shift(neighbor,i))
+			if height and not liquidflag then return height,pos2 end
 		end
 	end
 end
@@ -1082,7 +1080,6 @@ end
 
 function mobkit.lq_jumpattack(self,height,target)
 	local phase=1
-	local timer=0.5
 	local tgtbox = target:get_properties().collisionbox
 	local func=function(self)
 		if not mobkit.is_alive(target) then return true end
@@ -1162,7 +1159,6 @@ end
 function mobkit.hq_roam(self,prty)
 	local func=function(self)
 		if mobkit.is_queue_empty_low(self) and self.isonground then
-			local pos = mobkit.get_stand_pos(self)
 			local neighbor = random(8)
 
 			local height, tpos, liquidflag = mobkit.is_neighbor_node_reachable(self,neighbor)
@@ -1397,12 +1393,12 @@ function mobkit.hq_swimto(self,prty,tpos)
 		if mobkit.timer(self,1) then
 --perpendicular vectors: {-z,x};{z,-x}
 			local pos1 = mobkit.pos_shift(mobkit.pos_shift(pos,{x=-dir.z*offset,z=dir.x*offset}),dir)
-			local h,l = mobkit.get_terrain_height(pos1)
+			local h = mobkit.get_terrain_height(pos1)
 			if h and h>pos.y then
 				mobkit.lq_freejump(self)
 			else
 				local pos2 = mobkit.pos_shift(mobkit.pos_shift(pos,{x=dir.z*offset,z=-dir.x*offset}),dir)
-				local h,l = mobkit.get_terrain_height(pos2)
+				h = mobkit.get_terrain_height(pos2)
 				if h and h>pos.y then
 					mobkit.lq_freejump(self)
 				end
@@ -1435,7 +1431,7 @@ local function aqua_radar_dumb(pos,yaw,range,reverse)
 					return false
 				end
 			else
-				local h,l = mobkit.get_terrain_height(p)
+				local h = mobkit.get_terrain_height(p)
 				if h then
 					local node2 = mobkit.nodeatpos({x=p.x,y=h+1.99,z=p.z})
 					if node2 and node2.drawtype == 'liquid' then return true, h end
