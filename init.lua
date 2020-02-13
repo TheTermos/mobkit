@@ -894,7 +894,6 @@ function mobkit.actfunc(self, staticdata, dtime_s)
 	
 	if self.textures==nil then
 		local prop_tex = self.object:get_properties().textures
-		minetest.chat_send_all(minetest.serialize(prop_tex))
 		if prop_tex then self.textures=prop_tex end
 	end
 	
