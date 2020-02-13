@@ -892,6 +892,12 @@ function mobkit.actfunc(self, staticdata, dtime_s)
 		end
 	end
 	
+	if self.textures==nil then
+		local prop_tex = self.object:get_properties().textures
+		minetest.chat_send_all(minetest.serialize(prop_tex))
+		if prop_tex then self.textures=prop_tex end
+	end
+	
 	if not self.memory then 		-- this is the initial activation
 		self.memory = {} 
 		
@@ -904,7 +910,7 @@ function mobkit.actfunc(self, staticdata, dtime_s)
 	end
 	
 	-- apply texture
-	if self.texture_no then
+	if self.textures and self.texture_no then
 		local props = {}
 		props.textures = {self.textures[self.texture_no]}
 		self.object:set_properties(props)
