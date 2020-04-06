@@ -1296,8 +1296,13 @@ end
 function mobkit.hq_warn(self,prty,tgtobj)
 	local timer=0
 	local tgttime = 0
+	local init = true
 	local func = function(self)
 		if not mobkit.is_alive(tgtobj) then return true end
+		if init then
+			mobkit.animate(self,'stand')
+			init = false
+		end
 		local pos = mobkit.get_stand_pos(self)
 		local opos = tgtobj:get_pos()
 		local dist = vector.distance(pos,opos)
