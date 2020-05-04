@@ -444,6 +444,7 @@ function mobkit.make_sound(self, sound)
 		param_table.gain = in_range(spec.gain)
 		param_table.fade = in_range(spec.fade)
 		param_table.pitch = in_range(spec.pitch)
+		return minetest.sound_play(spec.name, param_table)
 	end
 	return minetest.sound_play(spec, param_table)
 end
