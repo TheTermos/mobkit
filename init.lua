@@ -27,7 +27,7 @@ end
 mobkit.terminal_velocity = sqrt(2*-mobkit.gravity*20) -- 20 meter fall = dead
 mobkit.safe_velocity = sqrt(2*-mobkit.gravity*5) -- 5 m safe fall
 
-local abr = minetest.get_mapgen_setting('active_block_range')
+local abr = tonumber(minetest.get_mapgen_setting('active_block_range')) or 3
 
 local neighbors ={
 	{x=1,z=0},
