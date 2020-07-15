@@ -1492,7 +1492,7 @@ function mobkit.is_in_deep(target)
 	local node2 = mobkit.nodeatpos(nodepos)
 	nodepos.y=nodepos.y-2
 	local node3 = mobkit.nodeatpos(nodepos)
-	if node1 and node2 and node1.drawtype=='liquid' and (node2.drawtype=='liquid' or node3.drawtype=='liquid') then
+	if node1 and node2 and node3 and node1.drawtype=='liquid' and (node2.drawtype=='liquid' or node3.drawtype=='liquid') then
 		return true
 	end
 end
