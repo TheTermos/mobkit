@@ -1148,7 +1148,9 @@ function mobkit.lq_fallover(self)
 		end
 		zrot=zrot+pi*0.05
 		local rot = self.object:get_rotation()
-		self.object:set_rotation({x=rot.x,y=rot.y,z=zrot})
+		if rot then
+			self.object:set_rotation({x=rot.x,y=rot.y,z=zrot})
+		end
 		if zrot >= pi*0.5 then return true end
 	end
 	mobkit.queue_low(self,func)
