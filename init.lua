@@ -421,7 +421,9 @@ function mobkit.animate(self,anim)
 			aparms = self.animation[anim]
 		end
 		
-		self.object:set_animation(aparms.range,aparms.speed,0,aparms.loop)
+		aparms.frame_blend = aparms.frame_blend or 0
+		
+		self.object:set_animation(aparms.range,aparms.speed,aparms.frame_blend,aparms.loop)
 	else
 		self._anim = nil
 	end
