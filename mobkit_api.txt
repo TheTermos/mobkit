@@ -5,6 +5,7 @@ Contents
 		1.1.1 Low level functions
 		1.1.2 High level functions
 			1.1.2.1 Priority
+		1.1.3 Modifying built in behaviors
 	1.2 Logic function
 	1.3 Processing diagram
 	1.4 Entity definition
@@ -37,8 +38,9 @@ They signal finished state by returning true, therefore it's very important to c
 For a behavior to begin executing it has to be put on a queue. There are two separate queues, one for low and one for high level behaviors.
 Queuing is covered by behavour defining conventions
 
-!!! In simplest scenarios there's no need to code behaviors, much can be achieved using only built-in stuff !!!
-!!! To start using the api it's enough to learn defining mobs and writing brain functions					 !!!
+Mobkit comes with some example behavior functions, which are located in /example_behaviors.lua
+!!! In simplest scenarios there's no need to code behaviors, much can be achieved using only built-in stuff 	!!!
+!!! To start using the api it's enough to learn defining mobs and writing brain functions			!!!
 
 
 1.1.1 Low level behavior functions
@@ -99,6 +101,10 @@ hq_bhv1(self,prty):
 
 Particular prioritization scheme is to be designed by the user according to specific mod requirements.
 
+1.1.3 Modifying built in behaviors
+
+Do not modify example_behaviors.lua directly, because functions defined there are meant to be shared between mods.
+Instead, copy the contents of /behaviors2override.lua into your mod/game, changing every occurence of the string '[yournamespace]' to the name of a lua table representing your namespace of choice.
 
 1.2 Logic function
 ------------------
@@ -138,22 +144,22 @@ end
 ----------------------
 
  ---------------------------------------
-|				PHYSICS					|
-|										|
-|		 -----------------------		|
-|		| Logic Function		|		|
-|		 -----------------------		|
-|			  |							|
-|		 -----|-----------------		|
-|		| 	  V		HL Queue	|		|
-|		|	| 1	| 2	| 3	|...	|		|
-|		 -----------------------		|
-|			  |							|
-|		 -----|-----------------		|
-|		| 	  V		LL Queue	|		|
-|		| 	| 1	| 2 | 3	|...	|		|
-|		 -----------------------		|
-|										|
+|		PHYSICS			|
+|					|
+|	-----------------------		|
+|	| Logic Function	|	|
+|	-----------------------		|
+|		|			|
+|	-----|-----------------		|
+|	|	V	HL Queue|	|
+|	| 1| 2| 3|...		|	|
+|	-----------------------		|
+|		|			|
+|	-----|-----------------		|
+|	|	V	LL Queue|	|
+|	| 1| 2| 3|...		|	|
+|	-----------------------		|
+|					|
  ---------------------------------------
 
  Order of execution during an engine step:
@@ -250,7 +256,7 @@ Some frequently used entity fields to be accessed directly for convenience
 
 	self.dtime		-- max(dtime as passed to on_step,0.5) - limit of 0.05 to prevent jerkines on long steps.
 	self.hp			-- hitpoints
-	self.isonground		-- true if pos.y remains unchanged for 2 consecutive steps
+	self.isonground		-- true if in collision with negative Y
 	self.isinliquid		-- true if the node at foot level is drawtype=='liquid'
 
 ------------
@@ -317,6 +323,13 @@ function mobkit.is_there_yet2d(pos,dir,dest) -- obj positon; facing vector; dest
 
 function mobkit.isnear3d(p1,p2,thresh)
 	-- returns true if pos p2 is within a cube with center at pos p1 and radius thresh
+
+function mobkit.get_box_intersect_cols(pos,box)
+	-- returns an array of {x=,z=} columns that the box intersects with.
+
+function mobkit.get_box_displace_cols(pos,box,vec,dist)
+	-- returns an array of {x=,z=} columns that the box would pass by if moved by horizontal vector vec
+	-- if dist provided, vec gets normalized.
 
 function mobkit.dir_to_rot(v,rot)
 	-- converts a 3d vector v to rotation like in set_rotation() object method
