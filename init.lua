@@ -852,15 +852,26 @@ end
 dofile(minetest.get_modpath("mobkit") .. "/example_behaviors.lua")
 
 minetest.register_on_mods_loaded(function()
+	
+	local funs = {}
+	
+	for n,_ in pairs(mobkit) do
+		table.insert(funs,n)
+	end
+	
+	table.sort(funs)
+	
 	local mbkfuns = ''
-	for n,f in pairs(mobkit) do
-		if type(f) == 'function' then
-			mbkfuns = mbkfuns .. n .. string.split(minetest.serialize(f),'.lua')[2] or ''
+	for _,n in ipairs(funs) do
+		if type(mobkit[n]) == 'function' then
+			mbkfuns = mbkfuns .. n .. string.split(minetest.serialize(mobkit[n]),'.lua')[2] or ''
 		end
 	end
+	mbkfuns = string.gsub(mbkfuns,"\n","")
 	local crc = minetest.sha1(mbkfuns)
---  dbg(crc)
-	if crc ~= 'a061770008fe9ecf8e1042a227dc3beabd10e481' then
+--	dbg(crc)
+	minetest.log("warning",crc)
+	if crc ~= '4a23bea3b6b1ff8bb53f9307776966678a5cf4ce' then
 		minetest.log("error","Mobkit namespace inconsistent, has been modified by other mods.")
 	end
 end)
