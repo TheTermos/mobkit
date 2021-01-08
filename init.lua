@@ -862,9 +862,11 @@ minetest.register_on_mods_loaded(function()
 	table.sort(funs)
 	
 	local mbkfuns = ''
+	minetest.log("warning",'namespace dump:')
 	for _,n in ipairs(funs) do
 		if type(mobkit[n]) == 'function' then
-			mbkfuns = mbkfuns .. n .. string.split(minetest.serialize(mobkit[n]),'.lua')[2] or ''
+--			mbkfuns = mbkfuns .. n .. string.split(minetest.serialize(mobkit[n]),'.lua')[2] or ''
+			minetest.log("warning",n .. string.gsub(string.split(minetest.serialize(mobkit[n]),'.lua')[2],"\n",""))
 		end
 	end
 	mbkfuns = string.gsub(mbkfuns,"\n","")
