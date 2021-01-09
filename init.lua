@@ -860,7 +860,7 @@ minetest.register_on_mods_loaded(function()
 	end
 	local crc = minetest.sha1(mbkfuns)
 --  dbg(crc)
-	if crc ~= 'a061770008fe9ecf8e1042a227dc3beabd10e481' then
-		minetest.log("error","Mobkit namespace inconsistent, has been modified by other mods.")
-	end
+--	if crc ~= 'a061770008fe9ecf8e1042a227dc3beabd10e481' then
+--		minetest.log("error","Mobkit namespace inconsistent, has been modified by other mods.")
+--	end
 end)
