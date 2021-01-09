@@ -20,6 +20,8 @@ local min = math.min
 local tan = math.tan
 local pow = math.pow
 
+local dbg = minetest.chat_send_all
+
 local sign = function(x)
 	return (x<0) and -1 or 1
 end
@@ -852,15 +854,33 @@ end
 dofile(minetest.get_modpath("mobkit") .. "/example_behaviors.lua")
 
 minetest.register_on_mods_loaded(function()
-	local mbkfuns = ''
+	
+	local funs = {}
+
+
 	for n,f in pairs(mobkit) do
 		if type(f) == 'function' then
-			mbkfuns = mbkfuns .. n .. string.split(minetest.serialize(f),'.lua')[2] or ''
+			local str = string.dump(f)
+			str = string.sub(string.byte(str,6)+7,-1)
+			local crc = minetest.sha1(str)
+			funs[n] = crc
 		end
+	end	
+	--[[
+	file = io.open(minetest.get_worldpath('forests') .. "/mobkit.crc","w")
+	file:write(minetest.serialize(funs))
+	file:close()	--]]
+	
+	file = io.open(minetest.get_modpath('mobkit') .. "/crc.txt","r")
+	local crcs = minetest.deserialize(file:read())
+	file:close()
+	
+	local str = ''
+	for n,c in pairs(funs) do
+		if c ~= crcs[n] then str = str .. ' ' .. n end 
 	end
-	local crc = minetest.sha1(mbkfuns)
---  dbg(crc)
-	if crc ~= 'a061770008fe9ecf8e1042a227dc3beabd10e481' then
-		minetest.log("error","Mobkit namespace inconsistent, has been modified by other mods.")
+
+	if str ~= '' then
+		minetest.log("error","Mobkit namespace inconsistent, functions:" .. str)
 	end
 end)
