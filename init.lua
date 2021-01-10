@@ -351,7 +351,7 @@ end
 
 function mobkit.get_box_displace_cols(pos,box,vec,dist)
 
-	local result = {}
+	local result = {{}}
 	-- front facing corner pos and neighbors
 	local fpos = {pos.y}
 	local xpos={pos.y}
