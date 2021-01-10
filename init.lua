@@ -381,26 +381,28 @@ function mobkit.get_box_displace_cols(pos,box,vec,dist)
 		-- traverse x
 	local xsgn = sign(vec.x)
 	local zsgn = sign(zoff)
-	local counter=0
+	local index=0
 	for x = floor(fpos.x+0.5)+xsgn*0.5, fpos.x+vec.x, xsgn do
+		index=index+1
+		if index > 50 then return result end
+		result[index] = result[index] or {}
 		local zcomp = vec.x == 0 and 0 or fpos.z + (x-fpos.x)*vec.z/vec.x	-- z component at the intersection of x and node edge
 		for z = floor(zcomp+0.5), floor(zcomp+zoff+0.5), zsgn do
-			counter=counter+1
-			if counter > 50 then return result end
-			table.insert(result,{x=x+xsgn*0.5,z=z})
+			table.insert(result[index],{x=x+xsgn*0.5,z=z})
 		end
 	end
 	
 			-- traverse z
 	local zsgn = sign(vec.z)
 	local xsgn = sign(xoff)
-	counter=0
+	index=0
 	for z = floor(fpos.z + 0.5)+zsgn*0.5, fpos.z+vec.z, zsgn do
+		index=index+1
+		if index > 50 then return result end
+		result[index] = result[index] or {}
 		local xcomp = vec.z == 0 and 0 or fpos.x + (z-fpos.z)*vec.x/vec.z
 		for x = floor(xcomp+0.5), floor(xcomp+xoff+0.5), xsgn do
-			counter=counter+1
-			if counter > 50 then return result end
-			table.insert(result,{x=x,z=z+zsgn*0.5})
+			table.insert(result[index],{x=x,z=z+zsgn*0.5})
 		end
 	end
 	
@@ -821,6 +823,7 @@ end
 
 function mobkit.stepfunc(self,dtime,colinfo)	-- not intended to be modified
 	self.dtime = min(dtime,0.2)
+	self.colinfo = colinfo
 	self.height = mobkit.get_box_height(self)
 	
 --  physics comes first
