@@ -642,7 +642,7 @@ function mobkit.hq_swimto(self,prty,tpos)
 		
 		if mobkit.timer(self,1) then
 			cols = mobkit.get_box_displace_cols(pos,box,dir,1)
-			for _,p in ipairs(cols) do
+			for _,p in ipairs(cols[1]) do
 				p.y=pos.y
 				local h,l = mobkit.get_terrain_height(p)
 				if h and h>pos.y and self.isinliquid then
