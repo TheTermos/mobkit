@@ -62,20 +62,18 @@ function mobkit.is_neighbor_node_reachable(self,neighbor)	-- todo: take either n
 		end
 	
 		-- check headroom
-		if tpos.y+self.height-pos.y > 1 then			-- if head in next node above, else no point checking headroom
-			local snpos = mobkit.get_node_pos(pos)
-			local pos1 = {x=pos.x,y=snpos.y+1,z=pos.z}						-- current pos plus node up
-			local pos2 = {x=tpos.x,y=tpos.y+self.height,z=tpos.z}			-- target head pos
+		local foot = mobkit.get_node_pos(pos)
+		local head = mobkit.get_node_pos(vector.new(pos.x, pos.y + self.height, pos.z))
+		local target_head = mobkit.get_node_pos(vector.new(tpos.x, tpos.y + self.height, tpos.z))
+		local target_high = vector.new(target_head.x, max(target_head.y, head.y), target_head.z)
+		if target_high.y > foot.y then -- If head in next node above, else no point checking headroom
+			local target_foot = mobkit.get_node_pos(tpos)
+			local low = vector.new(foot.x, target_foot.y + 1, foot.z)
 
-			local nodes = mobkit.get_nodes_in_area(pos1,pos2,true)
+			local nodes = mobkit.get_nodes_in_area(low, target_high, true)
 			
-			for p,node in pairs(nodes) do
-				if snpos.x==p.x and snpos.z==p.z then 
-					if node.name=='ignore' or node.walkable then return end
-				else
-					if node.name=='ignore' or 
-					(node.walkable and mobkit.get_node_height(p)>tpos.y+0.001) then return end
-				end
+			for p, node in pairs(nodes) do
+				if node.name=='ignore' or node.walkable then return end
 			end
 		end
 		
